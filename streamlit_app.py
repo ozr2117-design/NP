@@ -46,46 +46,58 @@ def is_trading_time():
 # ===============================
 @st.cache_data(ttl=10)
 def fetch_all_data():
-    """从腾讯接口获取所有 ETF 实时行情、IOPV、溢价率和规模"""
-    symbols = [f"{i['prefix']}{i['code']}" for i in MONITOR_LIST]
-    url = f"http://qt.gtimg.cn/q={','.join(symbols)}"
+    """从腾讯接口获取 ETF 行情以及美国指数期货行情"""
+    etf_symbols = [f"{i['prefix']}{i['code']}" for i in MONITOR_LIST]
+    fut_symbols = ["hf_NQ", "hf_ES"]
+    all_symbols = etf_symbols + fut_symbols
+    
+    url = f"http://qt.gtimg.cn/q={','.join(all_symbols)}"
     try:
-        # 腾讯接口返回 GBK 编码
         res = requests.get(url, timeout=5)
         text = res.content.decode("gbk")
         
-        result = {}
-        # 结果格式: v_sh513100="1~纳指ETF~513100...~3.13~1.6640...~";
+        result = {"etf": {}, "fut": {}}
         for line in text.split(";"):
-            if "~" not in line or "=" not in line: continue
+            if "=" not in line: continue
             try:
-                # 提取代码
-                code_match = line.split("=")[0].strip()[-6:]
-                # 提取数据部分
-                data_str = line.split('"')[1]
-                parts = data_str.split("~")
+                # 区分 ETF (v_sh...) 和 期货 (v_hf_...)
+                header, content = line.split("=")
+                data_str = content.strip('"')
                 
-                if len(parts) > 68:
-                    result[code_match] = {
-                        "name":         parts[1],            # 官方名称
-                        "current":      float(parts[3]),     # 最新价
-                        "percent":      float(parts[32]),    # 涨跌幅 (%)
-                        "scale_yi":     float(parts[45]) if parts[45] else 0.0, # 总市值 (亿元)
-                        "premium_rate": float(parts[67]),    # 溢价率 (%)
-                        "iopv":         float(parts[68]),    # IOPV
-                    }
+                # 期货接口 (逗号分隔)
+                if "hf_" in header:
+                    parts = data_str.split(",")
+                    if len(parts) > 13:
+                        name = "纳指期货" if "NQ" in header else "标普期货"
+                        result["fut"][name] = {
+                            "current": float(parts[0]),
+                            "percent": float(parts[1])
+                        }
+                # ETF 接口 (波浪号分隔)
+                elif "~" in data_str:
+                    code_match = header.strip()[-6:]
+                    parts = data_str.split("~")
+                    if len(parts) > 68:
+                        result["etf"][code_match] = {
+                            "name":         parts[1],
+                            "current":      float(parts[3]),
+                            "percent":      float(parts[32]),
+                            "scale_yi":     float(parts[45]) if parts[45] else 0.0,
+                            "premium_rate": float(parts[67]),
+                            "iopv":         float(parts[68]),
+                        }
             except: continue
         return result, None
     except Exception as e:
-        return None, f"腾讯接口访问失败: {e}"
+        return None, f"接口访问失败: {e}"
 
 # ===============================
 # 4. 构建数据表
 # ===============================
-def build_df(data):
+def build_df(data_etf):
     rows = []
     for item in MONITOR_LIST:
-        tx = data.get(item["code"], {})
+        tx = data_etf.get(item["code"], {})
         if not tx: continue
 
         rows.append({
@@ -130,43 +142,62 @@ body, .stApp { font-family: 'Inter', sans-serif; }
                white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .stat-delta-up   { font-size: 11px; color: #d62728; margin-top:1px; }
 .stat-delta-down { font-size: 11px; color: #2ca02c; margin-top:1px; }
-.closed-banner {
-    text-align:center; padding:10px 0; font-size:13px;
-    color:#888; background:#f5f5f5; border-radius:8px; margin-bottom:12px;
+.fut-box {
+    background: #ffffff; border: 1px solid #eee; border-radius: 8px; padding: 6px 12px;
+    display: flex; justify-content: space-between; align-items: center;
 }
+.fut-label { font-size: 11px; color: #666; font-weight: 600; }
+.fut-price { font-size: 13px; font-weight: 700; color: #1a1a1a; margin: 0 8px; }
+.fut-pct   { font-size: 12px; font-weight: 600; }
 </style>
-<div class='main-title'>📊 纳指 &amp;标普 ETF 实时溢价监控</div>
+<div class='main-title'>📊 纳指 &amp; 标普 ETF 实时溢价监控</div>
 """, unsafe_allow_html=True)
 
 # ===============================
-# 6. 状态判断
+# 7. 获取数据
 # ===============================
-trading = is_trading_time()
+res_all, err = fetch_all_data()
 
-col_btn1, col_btn2, col_btn3 = st.columns([2, 1, 2])
-with col_btn2:
-    refresh = st.button("🔄 立即刷新", use_container_width=True)
-if refresh:
-    st.cache_data.clear()
-    st.rerun()
+if err or not res_all:
+    st.error(f"数据加载失败: {err}")
+    st.stop()
+
+# 分离 ETF 和 期货数据
+data_etf = res_all.get("etf", {})
+data_fut = res_all.get("fut", {})
+
+def fut_html(name, data):
+    if not data: return ""
+    color = "#d62728" if data['percent'] >= 0 else "#2ca02c"
+    pm    = "+" if data['percent'] >= 0 else ""
+    return f"""
+    <div class='fut-box'>
+        <span class='fut-label'>{name}</span>
+        <span class='fut-price'>{data['current']:.2f}</span>
+        <span class='fut-pct' style='color:{color}'>{pm}{data['percent']:.2f}%</span>
+    </div>"""
+
+# --- 期货行情栏 (替代原刷新按钮) ---
+c_f1, c_f2, c_refresh = st.columns([10, 10, 1])
+with c_f1:
+    st.markdown(fut_html("NAS100 Fut", data_fut.get("纳指期货")), unsafe_allow_html=True)
+with c_f2:
+    st.markdown(fut_html("SP500 Fut", data_fut.get("标普期货")), unsafe_allow_html=True)
+with c_refresh:
+    if st.button("🔄", help="立即刷新"):
+        st.cache_data.clear()
+        st.rerun()
 
 if not trading:
     tz = pytz.timezone("Asia/Shanghai")
     now_str = datetime.now(tz).strftime("%Y-%m-%d %H:%M:%S")
     st.markdown(f"""
-    <div class='closed-banner'>🔴 <b>休市中</b>（{now_str} 北京时间）&nbsp;·&nbsp;开盘时段：09:30–11:30 / 13:00–15:00（周一至周五）</div>
+    <div style='text-align:center; padding:8px 0; font-size:12px; color:#888; background:#f9f9f9; border-radius:8px; margin: 10px 0;'>
+        🔴 <b>休市中</b>（{now_str}）&nbsp;·&nbsp;开盘期间自动刷新 (10s)
+    </div>
     """, unsafe_allow_html=True)
 
-# ===============================
-# 7. 获取数据
-# ===============================
-data, err = fetch_all_data()
-
-if err or not data:
-    st.error(f"数据加载失败: {err}")
-    st.stop()
-
-df = build_df(data)
+df = build_df(data_etf)
 
 if df.empty:
     st.warning("暂无数据，请稍后检查网络或接口状态。")
