@@ -154,8 +154,9 @@ body, .stApp { font-family: 'Inter', sans-serif; }
 """, unsafe_allow_html=True)
 
 # ===============================
-# 7. 获取数据
+# 7. 获取数据与交易状态
 # ===============================
+trading = is_trading_time()
 res_all, err = fetch_all_data()
 
 if err or not res_all:
