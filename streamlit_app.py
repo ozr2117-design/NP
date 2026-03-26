@@ -51,9 +51,39 @@ def is_trading_time():
     return morning or afternoon
 
 # ===============================
-# 4. 数据获取（批量 quote）
-#    market_cap 字段 = 总市值（元），即 总份额 × 最新价
-#    对 ETF 而言即基金规模，换算成亿元展示
+# 4a. 东方财富规模数据（f20=总市值/元 → 亿元，无需Cookie）
+# ===============================
+def _em_secid(item):
+    """根据 xq_sym 前缀生成东方财富 secid（SH→1, SZ→0）"""
+    prefix = "1" if item["xq_sym"].startswith("SH") else "0"
+    return f"{prefix}.{item['code']}"
+
+@st.cache_data(ttl=60)
+def fetch_em_scale():
+    """从东方财富 push2 公共接口获取 ETF 总市值（≈基金规模）"""
+    secids = ",".join([_em_secid(i) for i in MONITOR_LIST])
+    url = ("https://push2.eastmoney.com/api/qt/ulist.np/get"
+           f"?fltt=2&invt=2&fields=f12,f13,f20&secids={secids}")
+    try:
+        res = requests.get(url, headers={"Referer": "https://www.eastmoney.com"}, timeout=8)
+        raw = res.json().get("data", {}).get("diff", {})
+        # diff 可能是 dict（key=序号）或 list
+        items = raw.values() if isinstance(raw, dict) else raw
+        scale_map = {}
+        for row in items:
+            code = str(row.get("f12", ""))
+            f20  = row.get("f20")  # 总市值（元）
+            if code and f20 and f20 != "-":
+                try:
+                    scale_map[code] = round(float(f20) / 1e8, 2)
+                except:
+                    pass
+        return scale_map
+    except:
+        return {}
+
+# ===============================
+# 4b. 雪球数据获取
 # ===============================
 @st.cache_data(ttl=15)
 def fetch_xueqiu_data():
@@ -73,17 +103,13 @@ def fetch_xueqiu_data():
         for item in items:
             q = item.get("quote", {})
             sym = q.get("symbol")
-            # market_cap 单位：元；/1e8 → 亿元
-            mc = q.get("market_cap")
-            scale_yi = round(mc / 1e8, 2) if mc else None
             result[sym] = {
                 "current":      q.get("current", 0),
                 "last_close":   q.get("last_close", 0),
                 "iopv":         q.get("iopv"),
                 "premium_rate": q.get("premium_rate"),
                 "percent":      q.get("percent", 0),
-                "name":         q.get("name", ""),   # 雪球ETF全称
-                "scale_yi":     scale_yi,             # 基金规模（亿元）
+                "name":         q.get("name", ""),
             }
         return result, None
     except Exception as e:
@@ -92,7 +118,7 @@ def fetch_xueqiu_data():
 # ===============================
 # 5. 构建数据表
 # ===============================
-def build_df(data):
+def build_df(data, scale_map):
     rows = []
     for item in MONITOR_LIST:
         xq        = data.get(item["xq_sym"], {})
@@ -101,7 +127,7 @@ def build_df(data):
         premium   = xq.get("premium_rate")
         pct       = xq.get("percent", 0)
         full_name = xq.get("name") or item["short"]
-        scale_yi  = xq.get("scale_yi")
+        scale_yi  = scale_map.get(item["code"])   # 来自东方财富
 
         if iopv and current and iopv > 0:
             premium_calc = round(((current / iopv) - 1) * 100, 2)
@@ -188,13 +214,14 @@ if not trading:
 # 8. 获取数据
 # ===============================
 data, err = fetch_xueqiu_data()
+scale_map  = fetch_em_scale()          # 东方财富规模，独立缓存
 
 if err or not data:
     st.error(f"数据获取失败：{err}")
     st.info("可能是 Cookie 已过期，请重新抓取雪球 Cookie 并在 Streamlit Secrets 中更新 XUEQIU_COOKIE。")
     st.stop()
 
-df = build_df(data)
+df = build_df(data, scale_map)
 
 sp_valid = df[(df["分类"] == "标普") & df["溢价率(%)"].notna()]
 nd_valid = df[(df["分类"] == "纳指") & df["溢价率(%)"].notna()]
