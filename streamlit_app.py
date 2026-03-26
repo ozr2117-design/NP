@@ -208,8 +208,8 @@ if not sp_valid.empty:
     sp_min = sp_valid.loc[sp_valid["溢价率(%)"].idxmin()]
     sp_avg = sp_valid["溢价率(%)"].mean()
     c1, c2, c3 = st.columns(3)
-    with c1: st.markdown(stat_card("溢价最高", f"{sp_max['代码']} {sp_max['简称']}", sp_max["溢价率(%)"]), unsafe_allow_html=True)
-    with c2: st.markdown(stat_card("溢价最低", f"{sp_min['代码']} {sp_min['简称']}", sp_min["溢价率(%)"]), unsafe_allow_html=True)
+    with c1: st.markdown(stat_card("溢价最高", sp_max["名称"], sp_max["溢价率(%)"]), unsafe_allow_html=True)
+    with c2: st.markdown(stat_card("溢价最低", sp_min["名称"], sp_min["溢价率(%)"]), unsafe_allow_html=True)
     with c3: st.markdown(avg_card("平均溢价率", sp_avg), unsafe_allow_html=True)
 
 st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
@@ -221,8 +221,8 @@ if not nd_valid.empty:
     nd_min = nd_valid.loc[nd_valid["溢价率(%)"].idxmin()]
     nd_avg = nd_valid["溢价率(%)"].mean()
     c4, c5, c6 = st.columns(3)
-    with c4: st.markdown(stat_card("溢价最高", f"{nd_max['代码']} {nd_max['简称']}", nd_max["溢价率(%)"]), unsafe_allow_html=True)
-    with c5: st.markdown(stat_card("溢价最低", f"{nd_min['代码']} {nd_min['简称']}", nd_min["溢价率(%)"]), unsafe_allow_html=True)
+    with c4: st.markdown(stat_card("溢价最高", nd_max["名称"], nd_max["溢价率(%)"]), unsafe_allow_html=True)
+    with c5: st.markdown(stat_card("溢价最低", nd_min["名称"], nd_min["溢价率(%)"]), unsafe_allow_html=True)
     with c6: st.markdown(avg_card("平均溢价率", nd_avg), unsafe_allow_html=True)
 
 st.divider()
@@ -248,7 +248,7 @@ def color_category(val):
     elif val == "纳指": return "color:#b45309;font-weight:600"
     return ""
 
-display_cols = ["代码", "简称", "名称", "分类", "最新价", "IOPV", "涨跌幅(%)", "溢价率(%)", "资产净值"]
+display_cols = ["代码", "名称", "分类", "最新价", "涨跌幅(%)", "溢价率(%)", "资产净值"]
 
 styled = df[display_cols].style \
     .applymap(color_premium,  subset=["溢价率(%)"]) \
@@ -256,7 +256,6 @@ styled = df[display_cols].style \
     .applymap(color_category, subset=["分类"]) \
     .format({
         "最新价":     "{:.3f}",
-        "IOPV":       "{:.4f}",
         "涨跌幅(%)":  "{:+.2f}%",
         "溢价率(%)":  "{:+.2f}%",
         "资产净值":   "{:.2f} 亿",
