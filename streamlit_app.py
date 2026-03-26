@@ -62,24 +62,41 @@ def _em_secid(item):
 def fetch_em_scale():
     """从东方财富 push2 公共接口获取 ETF 总市值（≈基金规模）"""
     secids = ",".join([_em_secid(i) for i in MONITOR_LIST])
-    url = ("https://push2.eastmoney.com/api/qt/ulist.np/get"
+    # 增加 User-Agent 伪装，尝试 http 避开部分环境的 HTTPS/Proxy 问题
+    url = ("http://push2.eastmoney.com/api/qt/ulist.np/get"
            f"?fltt=2&invt=2&fields=f12,f13,f20&secids={secids}")
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+        "Referer": "https://www.eastmoney.com"
+    }
     try:
-        res = requests.get(url, headers={"Referer": "https://www.eastmoney.com"}, timeout=8)
-        raw = res.json().get("data", {}).get("diff", {})
-        # diff 可能是 dict（key=序号）或 list
-        items = raw.values() if isinstance(raw, dict) else raw
+        res = requests.get(url, headers=headers, timeout=5)
+        res.encoding = 'utf-8'
+        data_json = res.json()
+        raw = data_json.get("data", {}).get("diff", {})
+        
+        # 处理多种可能的返回格式
+        items = []
+        if isinstance(raw, dict):
+            items = list(raw.values())
+        elif isinstance(raw, list):
+            items = raw
+            
         scale_map = {}
         for row in items:
             code = str(row.get("f12", ""))
             f20  = row.get("f20")  # 总市值（元）
-            if code and f20 and f20 != "-":
+            if code and f20 is not None and f20 != "-":
                 try:
-                    scale_map[code] = round(float(f20) / 1e8, 2)
+                    val = float(f20)
+                    if val > 0:
+                        scale_map[code] = round(val / 1e8, 2)
                 except:
                     pass
         return scale_map
-    except:
+    except Exception as e:
+        # 如果出错，不再静默失败，可以返回一个空字典，并在控制台记录
+        print(f"Eastmoney Scale Fetch Error: {e}")
         return {}
 
 # ===============================
@@ -149,6 +166,9 @@ def build_df(data, scale_map):
         })
 
     df = pd.DataFrame(rows)
+    
+    # 强制将资产净值转为数值类型，确保 Styler 能正确识别
+    df["资产净值"] = pd.to_numeric(df["资产净值"], errors='coerce')
 
     # 分类排序：先标普后纳指，各自内部按溢价率从低到高
     sp_df = df[df["分类"] == "标普"].sort_values("溢价率(%)", ascending=True, na_position="last")
@@ -331,7 +351,7 @@ styled = df[display_cols].style \
         "IOPV":       lambda x: f"{x:.4f}" if isinstance(x, (int, float)) and not pd.isna(x) else "-",
         "涨跌幅(%)":  "{:+.2f}%",
         "溢价率(%)":  lambda x: f"{x:+.2f}%" if isinstance(x, (int, float)) and not pd.isna(x) else "-",
-        "资产净值":   lambda x: f"{x:.2f} 亿" if isinstance(x, (int, float)) and not pd.isna(x) else "-",
+        "资产净值":   lambda x: f"{x:.2f} 亿" if isinstance(x, (int, float)) and not pd.isna(x) and x > 0 else "-",
     })
 
 st.dataframe(styled, use_container_width=True, height=400, hide_index=True)
