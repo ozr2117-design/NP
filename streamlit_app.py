@@ -16,29 +16,20 @@ st.set_page_config(
 # ===============================
 MONITOR_LIST = [
     # 纳指类
-    {"code": "513100", "xq_sym": "SH513100", "short": "纳指ETF(华泰)",   "category": "纳指"},
-    {"code": "159941", "xq_sym": "SZ159941", "short": "纳指ETF(广发)",   "category": "纳指"},
-    {"code": "513300", "xq_sym": "SH513300", "short": "纳指ETF(华夏)",   "category": "纳指"},
-    {"code": "159659", "xq_sym": "SZ159659", "short": "纳指100ETF",      "category": "纳指"},
-    {"code": "159632", "xq_sym": "SZ159632", "short": "纳指100ETF(国联)","category": "纳指"},
+    {"code": "513100", "prefix": "sh", "short": "纳指ETF(华泰)",   "category": "纳指"},
+    {"code": "159941", "prefix": "sz", "short": "纳指ETF(广发)",   "category": "纳指"},
+    {"code": "513300", "prefix": "sh", "short": "纳指ETF(华夏)",   "category": "纳指"},
+    {"code": "159659", "prefix": "sz", "short": "纳指100ETF",      "category": "纳指"},
+    {"code": "159632", "prefix": "sz", "short": "纳指100ETF(国联)","category": "纳指"},
     # 标普类
-    {"code": "513500", "xq_sym": "SH513500", "short": "标普ETF(易方达)", "category": "标普"},
-    {"code": "159612", "xq_sym": "SZ159612", "short": "标普ETF(南方)",   "category": "标普"},
-    {"code": "159655", "xq_sym": "SZ159655", "short": "标普ETF",          "category": "标普"},
-    {"code": "513650", "xq_sym": "SH513650", "short": "标普ETF(汇添富)", "category": "标普"},
+    {"code": "513500", "prefix": "sh", "short": "标普ETF(易方达)", "category": "标普"},
+    {"code": "159612", "prefix": "sz", "short": "标普ETF(南方)",   "category": "标普"},
+    {"code": "159655", "prefix": "sz", "short": "标普ETF",          "category": "标普"},
+    {"code": "513650", "prefix": "sh", "short": "标普ETF(汇添富)", "category": "标普"},
 ]
 
 # ===============================
-# 2. 从 st.secrets 中读取 Cookie
-# ===============================
-try:
-    XUEQIU_COOKIE = st.secrets["XUEQIU_COOKIE"]
-except Exception:
-    st.error("请在 Streamlit Secrets 中配置 XUEQIU_COOKIE")
-    st.stop()
-
-# ===============================
-# 3. 开盘时间判断（北京时间）
+# 2. 开盘时间判断（北京时间）
 # ===============================
 def is_trading_time():
     tz = pytz.timezone("Asia/Shanghai")
@@ -51,131 +42,66 @@ def is_trading_time():
     return morning or afternoon
 
 # ===============================
-# 4a. 腾讯财经规模数据（无需Cookie，返回单位为亿元）
-# ===============================
-@st.cache_data(ttl=60)
-def fetch_tx_scale():
-    """从腾讯/新浪接口获取 ETF 总市值（亿元）作为体量参考"""
-    symbols_tx = [f"s_{('sh' if i['xq_sym'].startswith('SH') else 'sz')}{i['code']}" for i in MONITOR_LIST]
-    url_tx = f"http://qt.gtimg.cn/q={','.join(symbols_tx)}"
-    
-    scale_map = {}
-    
-    # 方案1: 腾讯财经
-    try:
-        res = requests.get(url_tx, timeout=5)
-        text = res.content.decode("gbk")
-        for line in text.split(";"):
-            if "~" not in line: continue
-            try:
-                code_match = line.split("=")[0].strip()[-6:]
-                data_str = line.split('"')[1]
-                parts = data_str.split("~")
-                # 简版接口市值通常在第 7 或 9 位
-                val = None
-                if len(parts) > 9 and parts[9] and parts[9] != "": val = parts[9]
-                elif len(parts) > 7 and parts[7] and parts[7] != "": val = parts[7]
-                
-                if val:
-                    scale_map[code_match] = round(float(val), 2)
-            except: continue
-    except: pass
-    
-    # 方案2: 新浪财经 (如果腾讯没抓全)
-    if len(scale_map) < len(MONITOR_LIST):
-        missing = [i for i in MONITOR_LIST if i["code"] not in scale_map]
-        symbols_sn = [f"{('sh' if i['xq_sym'].startswith('SH') else 'sz')}{i['code']}" for i in missing]
-        url_sn = f"http://hq.sinajs.cn/list={','.join(symbols_sn)}"
-        headers = {"Referer": "https://finance.sina.com.cn"}
-        try:
-            res = requests.get(url_sn, headers=headers, timeout=5)
-            text = res.text
-            # var hq_str_sh513100="纳指ETF,1.716,...(32个字段)";
-            for line in text.split(";"):
-                if "=" not in line: continue
-                try:
-                    code_match = line.split("_")[-1].split("=")[0][-6:]
-                    data_str = line.split('"')[1]
-                    parts = data_str.split(",")
-                    # 全量接口：第 31 或 32 个字段通常是市值，或者是资产净值
-                    # 但新浪比较复杂，通常我们取 [最新价 * 总股本]
-                    # 这里尝试找直接的指标字段
-                    pass 
-                except: continue
-        except: pass
-        
-    return scale_map
-
-# ===============================
-# 4b. 雪球数据获取
+# 3. 数据获取（全量从腾讯财经获取，无需Cookie）
 # ===============================
 @st.cache_data(ttl=15)
-def fetch_xueqiu_data():
-    symbols = ",".join([item["xq_sym"] for item in MONITOR_LIST])
-    url = f"https://stock.xueqiu.com/v5/stock/batch/quote.json?symbol={symbols}&extend=detail"
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-        "Referer": "https://xueqiu.com",
-        "Cookie": XUEQIU_COOKIE,
-    }
+def fetch_all_data():
+    """从腾讯接口获取所有 ETF 实时行情、IOPV、溢价率和规模"""
+    symbols = [f"{i['prefix']}{i['code']}" for i in MONITOR_LIST]
+    url = f"http://qt.gtimg.cn/q={','.join(symbols)}"
     try:
-        res = requests.get(url, headers=headers, timeout=8)
-        if res.status_code != 200:
-            return None, f"雪球接口返回 {res.status_code}"
-        items = res.json().get("data", {}).get("items", [])
+        # 腾讯接口返回 GBK 编码
+        res = requests.get(url, timeout=5)
+        text = res.content.decode("gbk")
+        
         result = {}
-        for item in items:
-            q = item.get("quote", {})
-            sym = q.get("symbol")
-            result[sym] = {
-                "current":      q.get("current", 0),
-                "last_close":   q.get("last_close", 0),
-                "iopv":         q.get("iopv"),
-                "premium_rate": q.get("premium_rate"),
-                "percent":      q.get("percent", 0),
-                "name":         q.get("name", ""),
-            }
+        # 结果格式: v_sh513100="1~纳指ETF~513100...~3.13~1.6640...~";
+        for line in text.split(";"):
+            if "~" not in line or "=" not in line: continue
+            try:
+                # 提取代码
+                code_match = line.split("=")[0].strip()[-6:]
+                # 提取数据部分
+                data_str = line.split('"')[1]
+                parts = data_str.split("~")
+                
+                if len(parts) > 68:
+                    result[code_match] = {
+                        "name":         parts[1],            # 官方名称
+                        "current":      float(parts[3]),     # 最新价
+                        "percent":      float(parts[32]),    # 涨跌幅 (%)
+                        "scale_yi":     float(parts[45]) if parts[45] else 0.0, # 总市值 (亿元)
+                        "premium_rate": float(parts[67]),    # 溢价率 (%)
+                        "iopv":         float(parts[68]),    # IOPV
+                    }
+            except: continue
         return result, None
     except Exception as e:
-        return None, str(e)
+        return None, f"腾讯接口访问失败: {e}"
 
 # ===============================
-# 5. 构建数据表
+# 4. 构建数据表
 # ===============================
-def build_df(data, scale_map):
+def build_df(data):
     rows = []
     for item in MONITOR_LIST:
-        xq        = data.get(item["xq_sym"], {})
-        current   = xq.get("current", 0)
-        iopv      = xq.get("iopv")
-        premium   = xq.get("premium_rate")
-        pct       = xq.get("percent", 0)
-        full_name = xq.get("name") or item["short"]
-        scale_yi  = scale_map.get(item["code"])   # 来自东方财富
-
-        if iopv and current and iopv > 0:
-            premium_calc = round(((current / iopv) - 1) * 100, 2)
-        elif premium is not None:
-            premium_calc = round(float(premium), 2)
-        else:
-            premium_calc = None
+        tx = data.get(item["code"], {})
+        if not tx: continue
 
         rows.append({
             "代码":       item["code"],
             "简称":       item["short"],
-            "名称":       full_name,
+            "名称":       tx.get("name") or item["short"],
             "分类":       item["category"],
-            "最新价":     current,
-            "IOPV":       round(iopv, 4) if iopv else None,
-            "涨跌幅(%)":  pct,
-            "溢价率(%)":  premium_calc,
-            "资产净值":   scale_yi,  # 实际上是体量/规模，用户要求显示为此名称
+            "最新价":     tx.get("current", 0),
+            "IOPV":       tx.get("iopv", 0),
+            "涨跌幅(%)":  tx.get("percent", 0),
+            "溢价率(%)":  tx.get("premium_rate", 0),
+            "资产净值":   tx.get("scale_yi", 0),
         })
 
     df = pd.DataFrame(rows)
-    
-    # 强制将资产净值转为数值类型，确保 Styler 能正确识别
-    df["资产净值"] = pd.to_numeric(df["资产净值"], errors='coerce')
+    if df.empty: return df
 
     # 分类排序：先标普后纳指，各自内部按溢价率从低到高
     sp_df = df[df["分类"] == "标普"].sort_values("溢价率(%)", ascending=True, na_position="last")
@@ -183,7 +109,7 @@ def build_df(data, scale_map):
     return pd.concat([sp_df, nd_df]).reset_index(drop=True)
 
 # ===============================
-# 6. 页面样式（含自定义卡片样式）
+# 5. 页面样式
 # ===============================
 st.markdown("""
 <style>
@@ -196,30 +122,25 @@ body, .stApp { font-family: 'Inter', sans-serif; }
             background:#e8f0fe; color:#1a56db; font-size:11px; font-weight:700; }
 .badge-nd { display:inline-block; padding:2px 8px; border-radius:10px;
             background:#fef3cd; color:#b45309; font-size:11px; font-weight:700; }
-/* 自定义小型统计卡片 */
 .stat-card {
-    background: #f8f9fa;
-    border-radius: 10px;
-    padding: 8px 12px;
-    min-width: 0;
+    background: #f8f9fa; border-radius: 10px; padding: 8px 12px; min-width: 0;
 }
 .stat-label  { font-size: 10px; color: #888; margin-bottom: 1px; white-space: nowrap; }
-.stat-value  { font-size: 12px; font-weight: 600; color: #1a1a1a;
+.stat-value  { font-size: 11px; font-weight: 600; color: #1a1a1a;
                white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .stat-delta-up   { font-size: 11px; color: #d62728; margin-top:1px; }
 .stat-delta-down { font-size: 11px; color: #2ca02c; margin-top:1px; }
-.stat-delta-avg  { font-size: 13px; font-weight:700; color: #d62728; margin-top:1px; }
 .closed-banner {
     text-align:center; padding:10px 0; font-size:13px;
     color:#888; background:#f5f5f5; border-radius:8px; margin-bottom:12px;
 }
 </style>
 <div class='main-title'>📊 纳指 &amp; 标普 ETF 实时溢价监控</div>
-<div class='subtitle'>数据源：雪球财经</div>
+<div class='subtitle'>数据源：腾讯财经 (零 Cookie 自动刷新版)</div>
 """, unsafe_allow_html=True)
 
 # ===============================
-# 7. 刷新按钮 & 开盘状态
+# 6. 状态判断
 # ===============================
 trading = is_trading_time()
 
@@ -238,38 +159,37 @@ if not trading:
     """, unsafe_allow_html=True)
 
 # ===============================
-# 8. 获取数据
+# 7. 获取数据
 # ===============================
-data, err = fetch_xueqiu_data()
-scale_map  = fetch_tx_scale()          # 改用腾讯财经规模，更稳定
+data, err = fetch_all_data()
 
 if err or not data:
-    st.error(f"数据获取失败：{err}")
-    st.info("可能是 Cookie 已过期，请重新抓取雪球 Cookie 并在 Streamlit Secrets 中更新 XUEQIU_COOKIE。")
+    st.error(f"数据加载失败: {err}")
     st.stop()
 
-df = build_df(data, scale_map)
+df = build_df(data)
 
-sp_valid = df[(df["分类"] == "标普") & df["溢价率(%)"].notna()]
-nd_valid = df[(df["分类"] == "纳指") & df["溢价率(%)"].notna()]
+if df.empty:
+    st.warning("暂无数据，请稍后检查网络或接口状态。")
+    st.stop()
+
+sp_valid = df[(df["分类"] == "标普") & (df["溢价率(%)"] != 0)]
+nd_valid = df[(df["分类"] == "纳指") & (df["溢价率(%)"] != 0)]
 
 # ===============================
-# 9. 自定义小型统计卡片
+# 8. 统计卡片 (自定义小型)
 # ===============================
-def delta_html(pct, cls_extra=""):
+def delta_html(pct):
     arrow = "↑" if pct >= 0 else "↓"
     cls   = "stat-delta-up" if pct >= 0 else "stat-delta-down"
-    if cls_extra:
-        cls = cls_extra
     return f"<div class='{cls}'>{arrow} {pct:+.2f}%</div>"
 
 def stat_card(label, code_short, pct):
-    delta = delta_html(pct)
     return f"""
     <div class='stat-card'>
         <div class='stat-label'>{label}</div>
         <div class='stat-value' title='{code_short}'>{code_short}</div>
-        {delta}
+        {delta_html(pct)}
     </div>"""
 
 def avg_card(label, pct):
@@ -278,69 +198,50 @@ def avg_card(label, pct):
     return f"""
     <div class='stat-card'>
         <div class='stat-label'>{label}</div>
-        <div style='font-size:16px;font-weight:700;color:{color};margin-top:4px;'>{arrow} {pct:+.2f}%</div>
+        <div style='font-size:15px;font-weight:700;color:{color};margin-top:4px;'>{arrow} {pct:+.2f}%</div>
     </div>"""
 
-# --- 标普卡片 ---
+# --- 标普 ---
 st.markdown("<div class='section-hdr'><span class='badge-sp'>标普 S&P</span></div>", unsafe_allow_html=True)
 if not sp_valid.empty:
     sp_max = sp_valid.loc[sp_valid["溢价率(%)"].idxmax()]
     sp_min = sp_valid.loc[sp_valid["溢价率(%)"].idxmin()]
     sp_avg = sp_valid["溢价率(%)"].mean()
     c1, c2, c3 = st.columns(3)
-    with c1:
-        st.markdown(stat_card("溢价最高",
-            f"{sp_max['代码']} {sp_max['简称']}", sp_max["溢价率(%)"]),
-            unsafe_allow_html=True)
-    with c2:
-        st.markdown(stat_card("溢价最低",
-            f"{sp_min['代码']} {sp_min['简称']}", sp_min["溢价率(%)"]),
-            unsafe_allow_html=True)
-    with c3:
-        st.markdown(avg_card("平均溢价率 (标普)", sp_avg), unsafe_allow_html=True)
+    with c1: st.markdown(stat_card("溢价最高", f"{sp_max['代码']} {sp_max['简称']}", sp_max["溢价率(%)"]), unsafe_allow_html=True)
+    with c2: st.markdown(stat_card("溢价最低", f"{sp_min['代码']} {sp_min['简称']}", sp_min["溢价率(%)"]), unsafe_allow_html=True)
+    with c3: st.markdown(avg_card("平均溢价率", sp_avg), unsafe_allow_html=True)
 
-st.markdown("<div style='height:10px'></div>", unsafe_allow_html=True)
+st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
 
-# --- 纳指卡片 ---
+# --- 纳指 ---
 st.markdown("<div class='section-hdr'><span class='badge-nd'>纳指 NASDAQ</span></div>", unsafe_allow_html=True)
 if not nd_valid.empty:
     nd_max = nd_valid.loc[nd_valid["溢价率(%)"].idxmax()]
     nd_min = nd_valid.loc[nd_valid["溢价率(%)"].idxmin()]
     nd_avg = nd_valid["溢价率(%)"].mean()
     c4, c5, c6 = st.columns(3)
-    with c4:
-        st.markdown(stat_card("溢价最高",
-            f"{nd_max['代码']} {nd_max['简称']}", nd_max["溢价率(%)"]),
-            unsafe_allow_html=True)
-    with c5:
-        st.markdown(stat_card("溢价最低",
-            f"{nd_min['代码']} {nd_min['简称']}", nd_min["溢价率(%)"]),
-            unsafe_allow_html=True)
-    with c6:
-        st.markdown(avg_card("平均溢价率 (纳指)", nd_avg), unsafe_allow_html=True)
+    with c4: st.markdown(stat_card("溢价最高", f"{nd_max['代码']} {nd_max['简称']}", nd_max["溢价率(%)"]), unsafe_allow_html=True)
+    with c5: st.markdown(stat_card("溢价最低", f"{nd_min['代码']} {nd_min['简称']}", nd_min["溢价率(%)"]), unsafe_allow_html=True)
+    with c6: st.markdown(avg_card("平均溢价率", nd_avg), unsafe_allow_html=True)
 
 st.divider()
 
 # ===============================
-# 10. 数据表
+# 9. 数据表
 # ===============================
 def color_premium(val):
-    if val is None or (isinstance(val, float) and pd.isna(val)):
-        return ""
     try:
         v = float(val)
         if v > 2:   return "background-color:#ff4d4d;color:white;font-weight:bold"
         elif v > 0: return "background-color:#ffcccc"
         elif v < 0: return "background-color:#ccffcc"
         return ""
-    except:
-        return ""
+    except: return ""
 
 def color_pct(val):
-    try:
-        return "color:#d62728" if float(val) > 0 else "color:#2ca02c"
-    except:
-        return ""
+    try: return "color:#d62728" if float(val) > 0 else "color:#2ca02c"
+    except: return ""
 
 def color_category(val):
     if val == "标普":   return "color:#1a56db;font-weight:600"
@@ -355,23 +256,23 @@ styled = df[display_cols].style \
     .applymap(color_category, subset=["分类"]) \
     .format({
         "最新价":     "{:.3f}",
-        "IOPV":       lambda x: f"{x:.4f}" if isinstance(x, (int, float)) and not pd.isna(x) else "-",
+        "IOPV":       "{:.4f}",
         "涨跌幅(%)":  "{:+.2f}%",
-        "溢价率(%)":  lambda x: f"{x:+.2f}%" if isinstance(x, (int, float)) and not pd.isna(x) else "-",
-        "资产净值":   lambda x: f"{x:.2f} 亿" if isinstance(x, (int, float)) and not pd.isna(x) and x > 0 else "-",
+        "溢价率(%)":  "{:+.2f}%",
+        "资产净值":   "{:.2f} 亿",
     })
 
-st.dataframe(styled, use_container_width=True, height=400, hide_index=True)
+st.dataframe(styled, use_container_width=True, height=420, hide_index=True)
 
 # ===============================
-# 11. 底栏时间戳
+# 10. 底栏
 # ===============================
 tz = pytz.timezone("Asia/Shanghai")
 now_bj = datetime.now(tz).strftime("%Y-%m-%d %H:%M:%S")
-st.caption(f"最后更新: {now_bj} (北京时间) · Cookie 有效期至 2026-04-20")
+st.caption(f"最后更新: {now_bj} (北京时间) · 每 30 秒自动刷新一次 (仅开盘期间)")
 
 # ===============================
-# 12. 仅开盘时段自动刷新（30秒）
+# 11. 自动刷新
 # ===============================
 if trading:
     st.markdown("""
