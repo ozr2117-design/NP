@@ -143,9 +143,9 @@ def build_df(data, scale_map):
             "分类":       item["category"],
             "最新价":     current,
             "IOPV":       round(iopv, 4) if iopv else None,
-            "规模(亿元)": scale_yi,
             "涨跌幅(%)":  pct,
             "溢价率(%)":  premium_calc,
+            "资产净值":   scale_yi,  # 实际上是体量/规模，用户要求显示为此名称
         })
 
     df = pd.DataFrame(rows)
@@ -173,15 +173,15 @@ body, .stApp { font-family: 'Inter', sans-serif; }
 .stat-card {
     background: #f8f9fa;
     border-radius: 10px;
-    padding: 10px 14px;
+    padding: 8px 12px;
     min-width: 0;
 }
-.stat-label  { font-size: 11px; color: #888; margin-bottom: 2px; white-space: nowrap; }
-.stat-value  { font-size: 13px; font-weight: 600; color: #1a1a1a;
+.stat-label  { font-size: 10px; color: #888; margin-bottom: 1px; white-space: nowrap; }
+.stat-value  { font-size: 12px; font-weight: 600; color: #1a1a1a;
                white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.stat-delta-up   { font-size: 12px; color: #d62728; margin-top:2px; }
-.stat-delta-down { font-size: 12px; color: #2ca02c; margin-top:2px; }
-.stat-delta-avg  { font-size: 14px; font-weight:700; color: #d62728; margin-top:2px; }
+.stat-delta-up   { font-size: 11px; color: #d62728; margin-top:1px; }
+.stat-delta-down { font-size: 11px; color: #2ca02c; margin-top:1px; }
+.stat-delta-avg  { font-size: 13px; font-weight:700; color: #d62728; margin-top:1px; }
 .closed-banner {
     text-align:center; padding:10px 0; font-size:13px;
     color:#888; background:#f5f5f5; border-radius:8px; margin-bottom:12px;
@@ -320,7 +320,7 @@ def color_category(val):
     elif val == "纳指": return "color:#b45309;font-weight:600"
     return ""
 
-display_cols = ["代码", "简称", "名称", "分类", "最新价", "IOPV", "规模(亿元)", "涨跌幅(%)", "溢价率(%)"]
+display_cols = ["代码", "简称", "名称", "分类", "最新价", "IOPV", "涨跌幅(%)", "溢价率(%)", "资产净值"]
 
 styled = df[display_cols].style \
     .applymap(color_premium,  subset=["溢价率(%)"]) \
@@ -329,9 +329,9 @@ styled = df[display_cols].style \
     .format({
         "最新价":     "{:.3f}",
         "IOPV":       lambda x: f"{x:.4f}" if isinstance(x, (int, float)) and not pd.isna(x) else "-",
-        "规模(亿元)": lambda x: f"{x:.2f}" if isinstance(x, (int, float)) and not pd.isna(x) else "-",
         "涨跌幅(%)":  "{:+.2f}%",
         "溢价率(%)":  lambda x: f"{x:+.2f}%" if isinstance(x, (int, float)) and not pd.isna(x) else "-",
+        "资产净值":   lambda x: f"{x:.2f} 亿" if isinstance(x, (int, float)) and not pd.isna(x) else "-",
     })
 
 st.dataframe(styled, use_container_width=True, height=400, hide_index=True)
