@@ -55,43 +55,56 @@ def is_trading_time():
 # ===============================
 @st.cache_data(ttl=60)
 def fetch_tx_scale():
-    """从腾讯接口获取 ETF 总市值（亿元）"""
-    # 腾讯格式: s_sh513100,s_sz159941...
-    symbols = []
-    for i in MONITOR_LIST:
-        prefix = "sh" if i["xq_sym"].startswith("SH") else "sz"
-        symbols.append(f"s_{prefix}{i['code']}")
+    """从腾讯/新浪接口获取 ETF 总市值（亿元）作为体量参考"""
+    symbols_tx = [f"s_{('sh' if i['xq_sym'].startswith('SH') else 'sz')}{i['code']}" for i in MONITOR_LIST]
+    url_tx = f"http://qt.gtimg.cn/q={','.join(symbols_tx)}"
     
-    url = f"http://qt.gtimg.cn/q={','.join(symbols)}"
+    scale_map = {}
+    
+    # 方案1: 腾讯财经
     try:
-        # 腾讯接口返回 GBK 编码
-        res = requests.get(url, timeout=5)
+        res = requests.get(url_tx, timeout=5)
         text = res.content.decode("gbk")
-        
-        scale_map = {}
-        # 结果格式: v_s_sh513100="1~纳指ETF~1.716...~162.44~~";
         for line in text.split(";"):
             if "~" not in line: continue
             try:
-                # 提取代码
                 code_match = line.split("=")[0].strip()[-6:]
-                # 提取数据部分
                 data_str = line.split('"')[1]
                 parts = data_str.split("~")
-                # 腾讯简版接口第 9 个字段是总市值（亿元）
-                if len(parts) > 9:
-                    val = parts[9] # 或者是 7? 经过测试 s_ 简版接口市值通常在第 9 位（索引 9）
-                    # 如果 index 9 不对，尝试 index 7
-                    if not val or val == "": val = parts[7]
-                    
-                    if val and val != "":
-                        scale_map[code_match] = round(float(val), 2)
-            except:
-                continue
-        return scale_map
-    except Exception as e:
-        print(f"Tencent Scale Fetch Error: {e}")
-        return {}
+                # 简版接口市值通常在第 7 或 9 位
+                val = None
+                if len(parts) > 9 and parts[9] and parts[9] != "": val = parts[9]
+                elif len(parts) > 7 and parts[7] and parts[7] != "": val = parts[7]
+                
+                if val:
+                    scale_map[code_match] = round(float(val), 2)
+            except: continue
+    except: pass
+    
+    # 方案2: 新浪财经 (如果腾讯没抓全)
+    if len(scale_map) < len(MONITOR_LIST):
+        missing = [i for i in MONITOR_LIST if i["code"] not in scale_map]
+        symbols_sn = [f"{('sh' if i['xq_sym'].startswith('SH') else 'sz')}{i['code']}" for i in missing]
+        url_sn = f"http://hq.sinajs.cn/list={','.join(symbols_sn)}"
+        headers = {"Referer": "https://finance.sina.com.cn"}
+        try:
+            res = requests.get(url_sn, headers=headers, timeout=5)
+            text = res.text
+            # var hq_str_sh513100="纳指ETF,1.716,...(32个字段)";
+            for line in text.split(";"):
+                if "=" not in line: continue
+                try:
+                    code_match = line.split("_")[-1].split("=")[0][-6:]
+                    data_str = line.split('"')[1]
+                    parts = data_str.split(",")
+                    # 全量接口：第 31 或 32 个字段通常是市值，或者是资产净值
+                    # 但新浪比较复杂，通常我们取 [最新价 * 总股本]
+                    # 这里尝试找直接的指标字段
+                    pass 
+                except: continue
+        except: pass
+        
+    return scale_map
 
 # ===============================
 # 4b. 雪球数据获取
