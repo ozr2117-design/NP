@@ -45,51 +45,57 @@ def is_trading_time():
 # 3. 数据获取（全量从腾讯财经获取，无需Cookie）
 # ===============================
 @st.cache_data(ttl=10)
-def fetch_all_data():
-    """从腾讯接口获取 ETF 行情以及美国指数期货行情"""
-    etf_symbols = [f"{i['prefix']}{i['code']}" for i in MONITOR_LIST]
-    fut_symbols = ["hf_NQ", "hf_ES"]
-    all_symbols = etf_symbols + fut_symbols
-    
-    url = f"http://qt.gtimg.cn/q={','.join(all_symbols)}"
+def fetch_etf_data():
+    """从腾讯接口读取 ETF 行情"""
+    symbols = [f"{i['prefix']}{i['code']}" for i in MONITOR_LIST]
+    url = f"http://qt.gtimg.cn/q={','.join(symbols)}"
     try:
         res = requests.get(url, timeout=5)
         text = res.content.decode("gbk")
-        
-        result = {"etf": {}, "fut": {}}
+        result = {}
         for line in text.split(";"):
+            if "~" not in line or "=" not in line: continue
+            try:
+                code_match = line.split("=")[0].strip()[-6:]
+                parts = line.split('"')[1].split("~")
+                if len(parts) > 68:
+                    result[code_match] = {
+                        "name":         parts[1],
+                        "current":      float(parts[3]),
+                        "percent":      float(parts[32]),
+                        "scale_yi":     float(parts[45]) if parts[45] else 0.0,
+                        "premium_rate": float(parts[67]),
+                        "iopv":         float(parts[68]),
+                    }
+            except: continue
+        return result
+    except: return {}
+
+@st.cache_data(ttl=10)
+def fetch_fut_data():
+    """从新浪接口读取美股期货行情 (相比腾讯更稳定)"""
+    symbols = "hf_NQ,hf_ES"
+    url = f"http://hq.sinajs.cn/list={symbols}"
+    headers = {"Referer": "https://finance.sina.com.cn/"}
+    try:
+        res = requests.get(url, headers=headers, timeout=5)
+        result = {}
+        # var hq_str_hf_NQ="最新,涨跌,买,卖,高,低,时间,昨收,今开...";
+        for line in res.text.split(";"):
             if "=" not in line: continue
             try:
-                # 区分 ETF (v_sh...) 和 期货 (v_hf_...)
-                header, content = line.split("=")
-                data_str = content.strip('"')
-                
-                # 期货接口 (逗号分隔)
-                if "hf_" in header:
-                    parts = data_str.split(",")
-                    if len(parts) > 13:
-                        name = "纳指期货" if "NQ" in header else "标普期货"
-                        result["fut"][name] = {
-                            "current": float(parts[0]),
-                            "percent": float(parts[1])
-                        }
-                # ETF 接口 (波浪号分隔)
-                elif "~" in data_str:
-                    code_match = header.strip()[-6:]
-                    parts = data_str.split("~")
-                    if len(parts) > 68:
-                        result["etf"][code_match] = {
-                            "name":         parts[1],
-                            "current":      float(parts[3]),
-                            "percent":      float(parts[32]),
-                            "scale_yi":     float(parts[45]) if parts[45] else 0.0,
-                            "premium_rate": float(parts[67]),
-                            "iopv":         float(parts[68]),
-                        }
+                header = line.split("=")[0]
+                content = line.split('"')[1]
+                parts = content.split(",")
+                if len(parts) > 13:
+                    name = "纳指期货" if "NQ" in header else "标普期货"
+                    curr = float(parts[0])
+                    prev = float(parts[7])
+                    pct = ((curr / prev) - 1) * 100 if prev > 0 else 0
+                    result[name] = {"current": curr, "percent": pct}
             except: continue
-        return result, None
-    except Exception as e:
-        return None, f"接口访问失败: {e}"
+        return result
+    except: return {}
 
 # ===============================
 # 4. 构建数据表
@@ -156,16 +162,13 @@ body, .stApp { font-family: 'Inter', sans-serif; }
 # ===============================
 # 7. 获取数据与交易状态
 # ===============================
-trading = is_trading_time()
-res_all, err = fetch_all_data()
+trading  = is_trading_time()
+data_etf = fetch_etf_data()
+data_fut = fetch_fut_data()
 
-if err or not res_all:
-    st.error(f"数据加载失败: {err}")
+if not data_etf:
+    st.error("数据加载失败，请检查网络。(Tencent API Error)")
     st.stop()
-
-# 分离 ETF 和 期货数据
-data_etf = res_all.get("etf", {})
-data_fut = res_all.get("fut", {})
 
 def fut_html(name, data):
     if not data: return ""
@@ -178,13 +181,13 @@ def fut_html(name, data):
         <span class='fut-pct' style='color:{color}'>{pm}{data['percent']:.2f}%</span>
     </div>"""
 
-# --- 期货行情栏 (替代原刷新按钮) ---
-c_f1, c_f2, c_refresh = st.columns([10, 10, 1])
+# --- 期货行情栏 (居中展示) ---
+c_f_left, c_f1, c_f2, c_f_right = st.columns([1, 4, 4, 1])
 with c_f1:
     st.markdown(fut_html("NAS100 Fut", data_fut.get("纳指期货")), unsafe_allow_html=True)
 with c_f2:
     st.markdown(fut_html("SP500 Fut", data_fut.get("标普期货")), unsafe_allow_html=True)
-with c_refresh:
+with c_f_right:
     if st.button("🔄", help="立即刷新"):
         st.cache_data.clear()
         st.rerun()
