@@ -51,52 +51,46 @@ def is_trading_time():
     return morning or afternoon
 
 # ===============================
-# 4a. 东方财富规模数据（f20=总市值/元 → 亿元，无需Cookie）
+# 4a. 腾讯财经规模数据（无需Cookie，返回单位为亿元）
 # ===============================
-def _em_secid(item):
-    """根据 xq_sym 前缀生成东方财富 secid（SH→1, SZ→0）"""
-    prefix = "1" if item["xq_sym"].startswith("SH") else "0"
-    return f"{prefix}.{item['code']}"
-
 @st.cache_data(ttl=60)
-def fetch_em_scale():
-    """从东方财富 push2 公共接口获取 ETF 总市值（≈基金规模）"""
-    secids = ",".join([_em_secid(i) for i in MONITOR_LIST])
-    # 增加 User-Agent 伪装，尝试 http 避开部分环境的 HTTPS/Proxy 问题
-    url = ("http://push2.eastmoney.com/api/qt/ulist.np/get"
-           f"?fltt=2&invt=2&fields=f12,f13,f20&secids={secids}")
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-        "Referer": "https://www.eastmoney.com"
-    }
+def fetch_tx_scale():
+    """从腾讯接口获取 ETF 总市值（亿元）"""
+    # 腾讯格式: s_sh513100,s_sz159941...
+    symbols = []
+    for i in MONITOR_LIST:
+        prefix = "sh" if i["xq_sym"].startswith("SH") else "sz"
+        symbols.append(f"s_{prefix}{i['code']}")
+    
+    url = f"http://qt.gtimg.cn/q={','.join(symbols)}"
     try:
-        res = requests.get(url, headers=headers, timeout=5)
-        res.encoding = 'utf-8'
-        data_json = res.json()
-        raw = data_json.get("data", {}).get("diff", {})
+        # 腾讯接口返回 GBK 编码
+        res = requests.get(url, timeout=5)
+        text = res.content.decode("gbk")
         
-        # 处理多种可能的返回格式
-        items = []
-        if isinstance(raw, dict):
-            items = list(raw.values())
-        elif isinstance(raw, list):
-            items = raw
-            
         scale_map = {}
-        for row in items:
-            code = str(row.get("f12", ""))
-            f20  = row.get("f20")  # 总市值（元）
-            if code and f20 is not None and f20 != "-":
-                try:
-                    val = float(f20)
-                    if val > 0:
-                        scale_map[code] = round(val / 1e8, 2)
-                except:
-                    pass
+        # 结果格式: v_s_sh513100="1~纳指ETF~1.716...~162.44~~";
+        for line in text.split(";"):
+            if "~" not in line: continue
+            try:
+                # 提取代码
+                code_match = line.split("=")[0].strip()[-6:]
+                # 提取数据部分
+                data_str = line.split('"')[1]
+                parts = data_str.split("~")
+                # 腾讯简版接口第 9 个字段是总市值（亿元）
+                if len(parts) > 9:
+                    val = parts[9] # 或者是 7? 经过测试 s_ 简版接口市值通常在第 9 位（索引 9）
+                    # 如果 index 9 不对，尝试 index 7
+                    if not val or val == "": val = parts[7]
+                    
+                    if val and val != "":
+                        scale_map[code_match] = round(float(val), 2)
+            except:
+                continue
         return scale_map
     except Exception as e:
-        # 如果出错，不再静默失败，可以返回一个空字典，并在控制台记录
-        print(f"Eastmoney Scale Fetch Error: {e}")
+        print(f"Tencent Scale Fetch Error: {e}")
         return {}
 
 # ===============================
@@ -234,7 +228,7 @@ if not trading:
 # 8. 获取数据
 # ===============================
 data, err = fetch_xueqiu_data()
-scale_map  = fetch_em_scale()          # 东方财富规模，独立缓存
+scale_map  = fetch_tx_scale()          # 改用腾讯财经规模，更稳定
 
 if err or not data:
     st.error(f"数据获取失败：{err}")
