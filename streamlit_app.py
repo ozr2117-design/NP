@@ -233,10 +233,9 @@ st.divider()
 def color_premium(val):
     try:
         v = float(val)
-        if v > 2:   return "background-color:#ff4d4d;color:white;font-weight:bold"
-        elif v > 0: return "background-color:#ffcccc"
-        elif v < 0: return "background-color:#ccffcc"
-        return ""
+        if v < 0:   return "background-color:#ff4d4d;color:white;font-weight:bold"
+        elif v < 2: return "background-color:#ffcccc"
+        else:       return "background-color:#ccffcc"
     except: return ""
 
 def color_pct(val):
@@ -261,7 +260,7 @@ styled = df[display_cols].style \
         "资产净值":   "{:.2f} 亿",
     })
 
-st.dataframe(styled, use_container_width=True, height=420, hide_index=True)
+st.dataframe(styled, use_container_width=True, hide_index=True)
 
 # ===============================
 # 10. 底栏
