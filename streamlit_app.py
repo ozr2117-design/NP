@@ -65,8 +65,8 @@ def fetch_etf_data():
                         "current":      curr,
                         "percent":      float(parts[32]),
                         "scale_yi":     float(parts[72]) / 100000000 if parts[72] else 0.0,
-                        "t1_nav":       float(parts[78]) if parts[78] else curr, # T-1 官方净值
-                        "official_iopv":float(parts[85]) if parts[85] else curr, # 交易所官方参考
+                        "t1_nav":       float(parts[78]) if parts[78] else curr,
+                        "static_premium": float(parts[77]) if parts[77] else 0.0, # 腾讯原始溢价
                     }
             except: continue
         return result
@@ -124,22 +124,23 @@ def build_df(data_etf, data_market):
         premium_rate = (tx["current"] / est_iopv - 1) * 100 if est_iopv > 0 else 0.0
 
         rows.append({
-            "代码":       item["code"],
-            "名称":       tx.get("name") or item["short"],
-            "分类":       item["category"],
-            "最新价":     tx.get("current", 0),
-            "估值(EST)":  est_iopv,
-            "涨跌幅(%)":  tx.get("percent", 0),
-            "溢价率(%)":  premium_rate,
-            "资产净值":   tx.get("scale_yi", 0),
+            "代码":           item["code"],
+            "名称":           tx.get("name") or item["short"],
+            "分类":           item["category"],
+            "最新价":         tx.get("current", 0),
+            "估值(EST)":      est_iopv,
+            "涨跌幅(%)":      tx.get("percent", 0),
+            "实时溢价(EST)":  premium_rate,
+            "券商参考溢价":    tx.get("static_premium", 0.0),
+            "资产净值":       tx.get("scale_yi", 0),
         })
 
     df = pd.DataFrame(rows)
     if df.empty: return df
 
     # 分类排序：先标普后纳指，各自内部按溢价率从低到高
-    sp_df = df[df["分类"] == "标普"].sort_values("溢价率(%)", ascending=True, na_position="last")
-    nd_df = df[df["分类"] == "纳指"].sort_values("溢价率(%)", ascending=True, na_position="last")
+    sp_df = df[df["分类"] == "标普"].sort_values("实时溢价(EST)", ascending=True, na_position="last")
+    nd_df = df[df["分类"] == "纳指"].sort_values("实时溢价(EST)", ascending=True, na_position="last")
     return pd.concat([sp_df, nd_df]).reset_index(drop=True)
 
 # ===============================
@@ -245,8 +246,8 @@ if df.empty:
     st.warning("暂无数据，请稍后检查网络或接口状态。")
     st.stop()
 
-sp_valid = df[(df["分类"] == "标普") & (df["溢价率(%)"] != 0)]
-nd_valid = df[(df["分类"] == "纳指") & (df["溢价率(%)"] != 0)]
+sp_valid = df[(df["分类"] == "标普") & (df["实时溢价(EST)"] != 0)]
+nd_valid = df[(df["分类"] == "纳指") & (df["实时溢价(EST)"] != 0)]
 
 # ===============================
 # 8. 统计卡片 (自定义小型)
@@ -276,12 +277,12 @@ def avg_card(label, pct):
 # --- 标普 ---
 st.markdown("<div class='section-hdr'><span class='badge-sp'>标普 S&P</span></div>", unsafe_allow_html=True)
 if not sp_valid.empty:
-    sp_max = sp_valid.loc[sp_valid["溢价率(%)"].idxmax()]
-    sp_min = sp_valid.loc[sp_valid["溢价率(%)"].idxmin()]
-    sp_avg = sp_valid["溢价率(%)"].mean()
+    sp_max = sp_valid.loc[sp_valid["实时溢价(EST)"].idxmax()]
+    sp_min = sp_valid.loc[sp_valid["实时溢价(EST)"].idxmin()]
+    sp_avg = sp_valid["实时溢价(EST)"].mean()
     c1, c2, c3 = st.columns(3)
-    with c1: st.markdown(stat_card("溢价最高", sp_max["名称"], sp_max["溢价率(%)"]), unsafe_allow_html=True)
-    with c2: st.markdown(stat_card("溢价最低", sp_min["名称"], sp_min["溢价率(%)"]), unsafe_allow_html=True)
+    with c1: st.markdown(stat_card("溢价最高", sp_max["名称"], sp_max["实时溢价(EST)"]), unsafe_allow_html=True)
+    with c2: st.markdown(stat_card("溢价最低", sp_min["名称"], sp_min["实时溢价(EST)"]), unsafe_allow_html=True)
     with c3: st.markdown(avg_card("平均溢价率", sp_avg), unsafe_allow_html=True)
 
 st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
@@ -289,12 +290,12 @@ st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
 # --- 纳指 ---
 st.markdown("<div class='section-hdr'><span class='badge-nd'>纳指 NASDAQ</span></div>", unsafe_allow_html=True)
 if not nd_valid.empty:
-    nd_max = nd_valid.loc[nd_valid["溢价率(%)"].idxmax()]
-    nd_min = nd_valid.loc[nd_valid["溢价率(%)"].idxmin()]
-    nd_avg = nd_valid["溢价率(%)"].mean()
+    nd_max = nd_valid.loc[nd_valid["实时溢价(EST)"].idxmax()]
+    nd_min = nd_valid.loc[nd_valid["实时溢价(EST)"].idxmin()]
+    nd_avg = nd_valid["实时溢价(EST)"].mean()
     c4, c5, c6 = st.columns(3)
-    with c4: st.markdown(stat_card("溢价最高", nd_max["名称"], nd_max["溢价率(%)"]), unsafe_allow_html=True)
-    with c5: st.markdown(stat_card("溢价最低", nd_min["名称"], nd_min["溢价率(%)"]), unsafe_allow_html=True)
+    with c4: st.markdown(stat_card("溢价最高", nd_max["名称"], nd_max["实时溢价(EST)"]), unsafe_allow_html=True)
+    with c5: st.markdown(stat_card("溢价最低", nd_min["名称"], nd_min["实时溢价(EST)"]), unsafe_allow_html=True)
     with c6: st.markdown(avg_card("平均溢价率", nd_avg), unsafe_allow_html=True)
 
 st.divider()
@@ -319,18 +320,19 @@ def color_category(val):
     elif val == "纳指": return "color:#b45309;font-weight:600"
     return ""
 
-display_cols = ["代码", "名称", "分类", "最新价", "估值(EST)", "涨跌幅(%)", "溢价率(%)", "资产净值"]
+display_cols = ["代码", "名称", "分类", "最新价", "估值(EST)", "涨跌幅(%)", "实时溢价(EST)", "券商参考溢价", "资产净值"]
 
 styled = df[display_cols].style \
-    .applymap(color_premium,  subset=["溢价率(%)"]) \
+    .applymap(color_premium,  subset=["实时溢价(EST)", "券商参考溢价"]) \
     .applymap(color_pct,      subset=["涨跌幅(%)"]) \
     .applymap(color_category, subset=["分类"]) \
     .format({
-        "最新价":     "{:.3f}",
-        "估值(EST)":  "{:.3f}",
-        "涨跌幅(%)":  "{:+.2f}%",
-        "溢价率(%)":  "{:+.2f}%",
-        "资产净值":   "{:.2f} 亿",
+        "最新价":         "{:.3f}",
+        "估值(EST)":      "{:.3f}",
+        "涨跌幅(%)":      "{:+.2f}%",
+        "实时溢价(EST)":  "{:+.2f}%",
+        "券商参考溢价":    "{:+.2f}%",
+        "资产净值":       "{:.2f} 亿",
     })
 
 st.dataframe(styled, use_container_width=True, hide_index=True)
@@ -343,11 +345,19 @@ now_bj = datetime.now(tz).strftime("%Y-%m-%d %H:%M:%S")
 st.caption(f"最后更新: {now_bj} (北京时间) · 每 10 秒自动刷新一次 (仅开盘期间)")
 
 # ===============================
-# 11. 自动刷新
+# 11. 自动刷新提示 & 脚本
 # ===============================
 if trading:
-    st.markdown("""
-<script>
-setTimeout(function(){ window.location.reload(); }, 10000);
-</script>
-""", unsafe_allow_html=True)
+    # 使用动态 Key 确保脚本标签每次都被强制重载
+    refresh_key = f"refresh_{int(time.time())}"
+    st.markdown(f"""
+        <div id="{refresh_key}" style="display:none;"></div>
+        <script>
+            setTimeout(function() {{
+                window.location.reload();
+            }}, 10000);
+        </script>
+    """, unsafe_allow_html=True)
+    st.caption(f"🔄 实时监控中 (10s 自动刷新) | 刷新 ID: {refresh_key}")
+else:
+    st.caption("⏸️ 当前非 A 股交易时段，自动刷新已暂停。")
