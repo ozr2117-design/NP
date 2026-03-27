@@ -60,14 +60,13 @@ def fetch_etf_data():
                 parts = line.split('"')[1].split("~")
                 if len(parts) > 85:
                     curr = float(parts[3])
-                    iopv = float(parts[85])
                     result[code_match] = {
                         "name":         parts[1],
                         "current":      curr,
                         "percent":      float(parts[32]),
                         "scale_yi":     float(parts[72]) / 100000000 if parts[72] else 0.0,
-                        "premium_rate": ((curr / iopv) - 1) * 100 if iopv > 0 else 0.0,
-                        "iopv":         iopv,
+                        "t1_nav":       float(parts[78]) if parts[78] else curr, # T-1 官方净值
+                        "official_iopv":float(parts[85]) if parts[85] else curr, # 交易所官方参考
                     }
             except: continue
         return result
@@ -104,23 +103,34 @@ def fetch_market_data():
     except: return {}
 
 # ===============================
-# 4. 构建数据表
+# 4. 构建数据表 (计算实时预估估值)
 # ===============================
-def build_df(data_etf):
+def build_df(data_etf, data_market):
     rows = []
+    
+    # 提取市场因子 (百分比)
+    nq_pct = data_market.get("纳指期货", {}).get("percent", 0.0)
+    es_pct = data_market.get("标普期货", {}).get("percent", 0.0)
+    fx_pct = data_market.get("USD/CNH", {}).get("percent", 0.0)
+
     for item in MONITOR_LIST:
         tx = data_etf.get(item["code"], {})
         if not tx: continue
 
+        # --- 实时估值核心算法 ---
+        # 实时估值 = 昨收净值 * (1 + 指数波幅 + 汇率波幅)
+        futures_pct = nq_pct if item["category"] == "纳指" else es_pct
+        est_iopv = tx["t1_nav"] * (1 + (futures_pct + fx_pct) / 100)
+        premium_rate = (tx["current"] / est_iopv - 1) * 100 if est_iopv > 0 else 0.0
+
         rows.append({
             "代码":       item["code"],
-            "简称":       item["short"],
             "名称":       tx.get("name") or item["short"],
             "分类":       item["category"],
             "最新价":     tx.get("current", 0),
-            "IOPV":       tx.get("iopv", 0),
+            "估值(EST)":  est_iopv,
             "涨跌幅(%)":  tx.get("percent", 0),
-            "溢价率(%)":  tx.get("premium_rate", 0),
+            "溢价率(%)":  premium_rate,
             "资产净值":   tx.get("scale_yi", 0),
         })
 
@@ -229,7 +239,7 @@ if not trading:
     </div>
     """, unsafe_allow_html=True)
 
-df = build_df(data_etf)
+df = build_df(data_etf, data_market)
 
 if df.empty:
     st.warning("暂无数据，请稍后检查网络或接口状态。")
@@ -309,7 +319,7 @@ def color_category(val):
     elif val == "纳指": return "color:#b45309;font-weight:600"
     return ""
 
-display_cols = ["代码", "名称", "分类", "最新价", "涨跌幅(%)", "溢价率(%)", "资产净值"]
+display_cols = ["代码", "名称", "分类", "最新价", "估值(EST)", "涨跌幅(%)", "溢价率(%)", "资产净值"]
 
 styled = df[display_cols].style \
     .applymap(color_premium,  subset=["溢价率(%)"]) \
@@ -317,6 +327,7 @@ styled = df[display_cols].style \
     .applymap(color_category, subset=["分类"]) \
     .format({
         "最新价":     "{:.3f}",
+        "估值(EST)":  "{:.3f}",
         "涨跌幅(%)":  "{:+.2f}%",
         "溢价率(%)":  "{:+.2f}%",
         "资产净值":   "{:.2f} 亿",
