@@ -86,13 +86,13 @@ def fetch_market_data():
                 name_key = line.split("=")[0].split("_")[-1]
                 content = line.split('"')[1]
                 parts = content.split(",")
-                if len(parts) > 13: # 期货格式
+                if "NQ" in name_key or "ES" in name_key: # 期货格式
                     name = "纳指期货" if "NQ" in name_key else "标普期货"
                     curr = float(parts[0])
                     prev = float(parts[7])
                     pct = ((curr / prev) - 1) * 100 if prev > 0 else 0
                     result[name] = {"current": curr, "percent": pct}
-                elif "susdcnh" in name_key and len(parts) > 10: # 汇率格式
+                elif "susdcnh" in name_key: # 汇率格式
                     curr = float(parts[1])
                     prev = float(parts[3])
                     pct = ((curr / prev) - 1) * 100 if prev > 0 else 0
@@ -217,23 +217,6 @@ with c_f_right:
 _, c_fx, _ = st.columns([1, 8, 1])
 with c_fx:
     st.markdown(fx_html(data_market.get("USD/CNH")), unsafe_allow_html=True)
-
-# --- 指标说明 (新增折叠) ---
-with st.expander("ℹ️ 跨境 ETF 投资必看：核心定价逻辑说明"):
-    st.markdown("""
-    ### 1. 为什么美股不涨，ETF 也会涨？
-    *   **汇率贡献**：USD/CNH（离岸人民币汇率）上涨意味着**人民币贬值**。因为 ETF 底层资产是美元，换回人民币时会变多。
-    *   **计算公式**：国内 ETF 涨跌幅 ≈ 指数涨跌幅 + 汇率涨跌幅。
-
-    ### 2. 什么是“溢价率”风险？
-    *   **溢价**：二级市场买入价高于其实际净值（IOPV）。
-    *   **风险**：当溢价率过高（如超过 2-3%）时，即便美股大涨，如果溢价回归，你依然可能亏损。
-    *   **QDII 额度**：当基金公司没钱（额度用完）买美股时，无法产生新份额，会导致溢价失控。
-
-    ### 3. 如何看 IOPV（参考净值）？
-    *   这是交易所根据最新市场行情（含期货、汇率预估）实时测算的“公允身价”。
-    *   **操作建议**：尽量选择溢价率在 **0.5% 以内** 甚至折价（负值）的品种以降低成本。
-    """)
 
 if not trading:
     tz = pytz.timezone("Asia/Shanghai")
