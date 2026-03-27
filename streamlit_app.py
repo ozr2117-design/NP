@@ -72,27 +72,31 @@ def fetch_etf_data():
     except: return {}
 
 @st.cache_data(ttl=10)
-def fetch_fut_data():
-    """从新浪接口读取美股期货行情 (相比腾讯更稳定)"""
-    symbols = "hf_NQ,hf_ES"
+def fetch_market_data():
+    """从新浪接口读取美股期货与汇率数据"""
+    symbols = "hf_NQ,hf_ES,fx_susdcnh"
     url = f"http://hq.sinajs.cn/list={symbols}"
     headers = {"Referer": "https://finance.sina.com.cn/"}
     try:
         res = requests.get(url, headers=headers, timeout=5)
         result = {}
-        # var hq_str_hf_NQ="最新,涨跌,买,卖,高,低,时间,昨收,今开...";
         for line in res.text.split(";"):
             if "=" not in line: continue
             try:
-                header = line.split("=")[0]
+                name_key = line.split("=")[0].split("_")[-1]
                 content = line.split('"')[1]
                 parts = content.split(",")
-                if len(parts) > 13:
-                    name = "纳指期货" if "NQ" in header else "标普期货"
+                if len(parts) > 13: # 期货格式
+                    name = "纳指期货" if "NQ" in name_key else "标普期货"
                     curr = float(parts[0])
                     prev = float(parts[7])
                     pct = ((curr / prev) - 1) * 100 if prev > 0 else 0
                     result[name] = {"current": curr, "percent": pct}
+                elif "susdcnh" in name_key and len(parts) > 10: # 汇率格式
+                    curr = float(parts[1])
+                    prev = float(parts[3])
+                    pct = ((curr / prev) - 1) * 100 if prev > 0 else 0
+                    result["USD/CNH"] = {"current": curr, "percent": pct}
             except: continue
         return result
     except: return {}
@@ -150,11 +154,17 @@ body, .stApp { font-family: 'Inter', sans-serif; }
 .stat-delta-down { font-size: 11px; color: #2ca02c; margin-top:1px; }
 .fut-box {
     background: #ffffff; border: 1px solid #eee; border-radius: 8px; padding: 6px 12px;
-    display: flex; justify-content: space-between; align-items: center;
+    display: flex; justify-content: space-between; align-items: center; height: 36px;
 }
 .fut-label { font-size: 11px; color: #666; font-weight: 600; }
 .fut-price { font-size: 13px; font-weight: 700; color: #1a1a1a; margin: 0 8px; }
 .fut-pct   { font-size: 12px; font-weight: 600; }
+.fx-box {
+    background: #fff5f5; border: 1px solid #ffdada; border-radius: 8px; padding: 4px 12px;
+    display: flex; justify-content: center; align-items: center; margin-top: 6px;
+}
+.fx-label { font-size: 11px; color: #c53030; font-weight: 700; margin-right: 12px; }
+.fx-price { font-size: 13px; font-weight: 700; color: #1a1a1a; margin-right: 8px; }
 </style>
 <div class='main-title'>📊 纳指 &amp; 标普 ETF 实时溢价监控</div>
 """, unsafe_allow_html=True)
@@ -164,7 +174,7 @@ body, .stApp { font-family: 'Inter', sans-serif; }
 # ===============================
 trading  = is_trading_time()
 data_etf = fetch_etf_data()
-data_fut = fetch_fut_data()
+data_market = fetch_market_data()
 
 if not data_etf:
     st.error("数据加载失败，请检查网络。(Tencent API Error)")
@@ -181,16 +191,49 @@ def fut_html(name, data):
         <span class='fut-pct' style='color:{color}'>{pm}{data['percent']:.2f}%</span>
     </div>"""
 
-# --- 期货行情栏 (居中展示) ---
+def fx_html(data):
+    if not data: return ""
+    color = "#d62728" if data['percent'] >= 0 else "#2ca02c"
+    pm    = "+" if data['percent'] >= 0 else ""
+    return f"""
+    <div class='fx-box'>
+        <span class='fx-label'>USD/CNH 离岸汇率</span>
+        <span class='fx-price'>{data['current']:.4f}</span>
+        <span class='fut-pct' style='color:{color}'>{pm}{data['percent']:.2f}%</span>
+    </div>"""
+
+# --- 市场行情栏 ---
 c_f_left, c_f1, c_f2, c_f_right = st.columns([1, 4, 4, 1])
 with c_f1:
-    st.markdown(fut_html("NAS100 Fut", data_fut.get("纳指期货")), unsafe_allow_html=True)
+    st.markdown(fut_html("NAS100 Fut", data_market.get("纳指期货")), unsafe_allow_html=True)
 with c_f2:
-    st.markdown(fut_html("SP500 Fut", data_fut.get("标普期货")), unsafe_allow_html=True)
+    st.markdown(fut_html("SP500 Fut", data_market.get("标普期货")), unsafe_allow_html=True)
 with c_f_right:
     if st.button("🔄", help="立即刷新"):
         st.cache_data.clear()
         st.rerun()
+
+# --- USD/CNH 汇率栏 (新增) ---
+_, c_fx, _ = st.columns([1, 8, 1])
+with c_fx:
+    st.markdown(fx_html(data_market.get("USD/CNH")), unsafe_allow_html=True)
+
+# --- 指标说明 (新增折叠) ---
+with st.expander("ℹ️ 跨境 ETF 投资必看：核心定价逻辑说明"):
+    st.markdown("""
+    ### 1. 为什么美股不涨，ETF 也会涨？
+    *   **汇率贡献**：USD/CNH（离岸人民币汇率）上涨意味着**人民币贬值**。因为 ETF 底层资产是美元，换回人民币时会变多。
+    *   **计算公式**：国内 ETF 涨跌幅 ≈ 指数涨跌幅 + 汇率涨跌幅。
+
+    ### 2. 什么是“溢价率”风险？
+    *   **溢价**：二级市场买入价高于其实际净值（IOPV）。
+    *   **风险**：当溢价率过高（如超过 2-3%）时，即便美股大涨，如果溢价回归，你依然可能亏损。
+    *   **QDII 额度**：当基金公司没钱（额度用完）买美股时，无法产生新份额，会导致溢价失控。
+
+    ### 3. 如何看 IOPV（参考净值）？
+    *   这是交易所根据最新市场行情（含期货、汇率预估）实时测算的“公允身价”。
+    *   **操作建议**：尽量选择溢价率在 **0.5% 以内** 甚至折价（负值）的品种以降低成本。
+    """)
 
 if not trading:
     tz = pytz.timezone("Asia/Shanghai")
