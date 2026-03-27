@@ -58,14 +58,16 @@ def fetch_etf_data():
             try:
                 code_match = line.split("=")[0].strip()[-6:]
                 parts = line.split('"')[1].split("~")
-                if len(parts) > 68:
+                if len(parts) > 85:
+                    curr = float(parts[3])
+                    iopv = float(parts[85])
                     result[code_match] = {
                         "name":         parts[1],
-                        "current":      float(parts[3]),
+                        "current":      curr,
                         "percent":      float(parts[32]),
-                        "scale_yi":     float(parts[45]) if parts[45] else 0.0,
-                        "premium_rate": float(parts[67]),
-                        "iopv":         float(parts[68]),
+                        "scale_yi":     float(parts[72]) / 100000000 if parts[72] else 0.0,
+                        "premium_rate": ((curr / iopv) - 1) * 100 if iopv > 0 else 0.0,
+                        "iopv":         iopv,
                     }
             except: continue
         return result
