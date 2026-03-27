@@ -222,7 +222,7 @@ with c_f1:
     st.markdown(fut_html("NAS100 Fut", data_market.get("纳指期货")), unsafe_allow_html=True)
 with c_f2:
     st.markdown(fut_html("SP500 Fut", data_market.get("标普期货")), unsafe_allow_html=True)
-# --- 交易状态 & 自动刷新 (中置显示) ---
+# --- 交易状态 & 自动刷新 (中置显示预留) ---
 tz = pytz.timezone("Asia/Shanghai")
 now_obj = datetime.now(tz)
 now_str = now_obj.strftime("%H:%M:%S")
@@ -230,11 +230,6 @@ now_str = now_obj.strftime("%H:%M:%S")
 if trading:
     # 核心刷新逻辑：仅在交易时段触发 10s 刷新
     st_autorefresh(interval=10000, key="data_refresh")
-    status_html = f"<div style='text-align:center; font-size:13px; color:#1a56db; font-weight:700; margin: 4px 0;'>🕒 刷新中 | {now_str}</div>"
-else:
-    status_html = f"<div style='text-align:center; font-size:13px; color:#ef4444; font-weight:700; margin: 4px 0;'>🔴 休市中 | {now_str}</div>"
-
-st.markdown(status_html, unsafe_allow_html=True)
 
 # --- USD/CNH 汇率栏 (新增) ---
 _, c_fx, _ = st.columns([1, 8, 1])
@@ -242,6 +237,28 @@ with c_fx:
     st.markdown(fx_html(data_market.get("USD/CNH")), unsafe_allow_html=True)
 
 df = build_df(data_etf, data_market)
+
+# --- 情绪指数判定 (基于实时溢价 EST) ---
+emotion_badge = ""
+if not df.empty:
+    min_p = df["实时溢价(EST)"].min()
+    max_p = df["实时溢价(EST)"].max()
+    
+    if min_p < 0:
+        emotion_badge = "<span style='margin-left:12px; padding:2px 8px; background:#ef4444; color:#fff; border-radius:4px; font-size:12px;'>🔥 情绪：恐慌（建议成交，坚定买入）</span>"
+    elif min_p < 1 or (min_p >= 1 and max_p <= 2):
+        emotion_badge = "<span style='margin-left:12px; padding:2px 8px; background:#f97316; color:#fff; border-radius:4px; font-size:12px;'>💎 情绪：比较恐慌（建议成交，适当加仓）</span>"
+
+# 渲染居中状态栏
+st_color = "#1a56db" if trading else "#ef4444"
+st_txt   = "🕒 刷新中" if trading else "🔴 休市中"
+status_html = f"""
+    <div style='display:flex; justify-content:center; align-items:center; font-size:13px; font-weight:700; margin: 8px 0;'>
+        <span style='color:{st_color};'>{st_txt} | {now_str}</span>
+        {emotion_badge}
+    </div>
+"""
+st.markdown(status_html, unsafe_allow_html=True)
 
 if df.empty:
     st.warning("暂无数据，请稍后检查网络或接口状态。")
