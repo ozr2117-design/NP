@@ -4,6 +4,7 @@ import requests
 import time
 from datetime import datetime
 import pytz
+from streamlit_autorefresh import st_autorefresh
 
 st.set_page_config(
     page_title="ETF 溢价实时监控",
@@ -221,24 +222,24 @@ with c_f1:
     st.markdown(fut_html("NAS100 Fut", data_market.get("纳指期货")), unsafe_allow_html=True)
 with c_f2:
     st.markdown(fut_html("SP500 Fut", data_market.get("标普期货")), unsafe_allow_html=True)
-with c_f_right:
-    if st.button("🔄", help="立即刷新"):
-        st.cache_data.clear()
-        st.rerun()
+# --- 交易状态 & 自动刷新 (中置显示) ---
+tz = pytz.timezone("Asia/Shanghai")
+now_obj = datetime.now(tz)
+now_str = now_obj.strftime("%H:%M:%S")
+
+if trading:
+    # 核心刷新逻辑：仅在交易时段触发 10s 刷新
+    st_autorefresh(interval=10000, key="data_refresh")
+    status_html = f"<div style='text-align:center; font-size:13px; color:#1a56db; font-weight:700; margin: 4px 0;'>🕒 刷新中 | {now_str}</div>"
+else:
+    status_html = f"<div style='text-align:center; font-size:13px; color:#ef4444; font-weight:700; margin: 4px 0;'>🔴 休市中 | {now_str}</div>"
+
+st.markdown(status_html, unsafe_allow_html=True)
 
 # --- USD/CNH 汇率栏 (新增) ---
 _, c_fx, _ = st.columns([1, 8, 1])
 with c_fx:
     st.markdown(fx_html(data_market.get("USD/CNH")), unsafe_allow_html=True)
-
-if not trading:
-    tz = pytz.timezone("Asia/Shanghai")
-    now_str = datetime.now(tz).strftime("%Y-%m-%d %H:%M:%S")
-    st.markdown(f"""
-    <div style='text-align:center; padding:8px 0; font-size:12px; color:#888; background:#f9f9f9; border-radius:8px; margin: 10px 0;'>
-        🔴 <b>休市中</b>（{now_str}）&nbsp;·&nbsp;开盘期间自动刷新 (10s)
-    </div>
-    """, unsafe_allow_html=True)
 
 df = build_df(data_etf, data_market)
 
@@ -345,19 +346,6 @@ now_bj = datetime.now(tz).strftime("%Y-%m-%d %H:%M:%S")
 st.caption(f"最后更新: {now_bj} (北京时间) · 每 10 秒自动刷新一次 (仅开盘期间)")
 
 # ===============================
-# 11. 自动刷新提示 & 脚本
+# 11. 底栏提示
 # ===============================
-if trading:
-    # 使用动态 Key 确保脚本标签每次都被强制重载
-    refresh_key = f"refresh_{int(time.time())}"
-    st.markdown(f"""
-        <div id="{refresh_key}" style="display:none;"></div>
-        <script>
-            setTimeout(function() {{
-                window.location.reload();
-            }}, 10000);
-        </script>
-    """, unsafe_allow_html=True)
-    st.caption(f"🔄 实时监控中 (10s 自动刷新) | 刷新 ID: {refresh_key}")
-else:
-    st.caption("⏸️ 当前非 A 股交易时段，自动刷新已暂停。")
+st.caption("数据来源：腾讯/新浪财经 · 本站仅通过公式计算提供实时估值参考，不构成投资建议。")
