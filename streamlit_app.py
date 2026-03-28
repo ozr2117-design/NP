@@ -7,7 +7,7 @@ import pytz
 from streamlit_autorefresh import st_autorefresh
 
 st.set_page_config(
-    page_title="ETF 溢价实时监控",
+    page_title="SPX & NASDAQ ETF 实时溢价监控",
     page_icon="📊",
     layout="wide"
 )
@@ -180,7 +180,7 @@ body, .stApp { font-family: 'Inter', sans-serif; }
 .fx-label { font-size: 11px; color: #c53030; font-weight: 700; margin-right: 12px; }
 .fx-price { font-size: 13px; font-weight: 700; color: #1a1a1a; margin-right: 8px; }
 </style>
-<div class='main-title'>📊 纳指 &amp; 标普 ETF 实时溢价监控</div>
+<div class='main-title'>📊 SPX &amp; NASDAQ ETF 实时溢价监控</div>
 """, unsafe_allow_html=True)
 
 # ===============================
