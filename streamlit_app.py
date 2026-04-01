@@ -124,9 +124,9 @@ def get_clean_premium_data(symbol: str, prefix: str = "sh"):
     df_price = df_price[['date', 'close']]
     df_price['date'] = pd.to_datetime(df_price['date'])
 
-    # 两年历史深度 (730天)
-    two_years_ago = pd.Timestamp.now() - pd.DateOffset(days=730)
-    df_price = df_price[df_price['date'] >= two_years_ago]
+    # 历史深度：近五年 (1825天) 或成立至今
+    five_years_ago = pd.Timestamp.now() - pd.DateOffset(days=1825)
+    df_price = df_price[df_price['date'] >= five_years_ago]
 
     time.sleep(0.5)   # 防反爬熔断
 
@@ -213,7 +213,7 @@ def plot_premium_chart(df: pd.DataFrame, etf_name: str, etf_code: str):
     # 5. 布局优化
     fig.update_layout(
         title=dict(
-            text=f"过去一年 {etf_code} ({etf_name}) 真实折溢价率走势",
+            text=f"{etf_code} ({etf_name}) 历史真实折溢价率走势 (近五年或成立至今)",
             x=0.5, xanchor='center', font=dict(size=16)
         ),
         xaxis=dict(
@@ -536,9 +536,9 @@ for _, row in df.iterrows():
                         min_premium    = df_hist['premium_rate'].min()
                         c_s1, c_s2, c_s3, c_s4 = st.columns(4)
                         c_s1.metric("最新折溢价率", f"{latest_premium:+.2f}%")
-                        c_s2.metric("近一年均值",   f"{avg_premium:+.2f}%")
-                        c_s3.metric("近一年最高",   f"{max_premium:+.2f}%")
-                        c_s4.metric("近一年最低",   f"{min_premium:+.2f}%")
+                        c_s2.metric("历史平均值",   f"{avg_premium:+.2f}%")
+                        c_s3.metric("历史最高值",   f"{max_premium:+.2f}%")
+                        c_s4.metric("历史最低值",   f"{min_premium:+.2f}%")
                 except Exception as e:
                     st.error(f"数据获取失败：{e}")
 
