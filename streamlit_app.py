@@ -462,66 +462,80 @@ def color_category(val):
     elif val == "纳指": return "color:#b45309;font-weight:600"
     return ""
 
-display_cols = ["代码", "名称", "分类", "最新价", "估值(EST)", "涨跌幅(%)", "实时溢价(EST)", "券商参考溢价", "资产净值"]
-
-styled = df[display_cols].style \
-    .map(color_premium,  subset=["实时溢价(EST)", "券商参考溢价"]) \
-    .map(color_pct,      subset=["涨跌幅(%)"]) \
-    .map(color_category, subset=["分类"]) \
-    .format({
-        "最新价":         "{:.3f}",
-        "估值(EST)":      "{:.3f}",
-        "涨跌幅(%)":      "{:+.2f}%",
-        "实时溢价(EST)":  "{:+.2f}%",
-        "券商参考溢价":    "{:+.2f}%",
-        "资产净值":       "{:.2f} 亿",
-    })
-
-st.dataframe(styled, use_container_width=True, hide_index=True)
-
 # ===============================
-# 9b. 历史折溢价走势图（懒加载）
+# 9. 核心行情与历史走势集成表 (分行折叠设计)
 # ===============================
-st.markdown("---")
-st.markdown("""
-<div style='font-size:15px; font-weight:700; margin-bottom:10px;'>
-    📈 历史折溢价率走势图（阅表顺序·点击展开后手动加载，避免卡顿）
-</div>
-""", unsafe_allow_html=True)
+st.markdown("<div class='section-hdr'>📈 实时行情 & 历史走势集成 (点击行展开详情与图表)</div>", unsafe_allow_html=True)
 
-# expander 顺序跟随表格排序（df 已按标普/纳指分组、各组内按溢价率升序排列）
+# 模拟表头
+h_c0, h_c1, h_c2, h_c3, h_c4 = st.columns([1.2, 2.5, 1.2, 1.2, 2.5])
+with h_c0: st.markdown("<small style='color:#888'>代码/分类</small>", unsafe_allow_html=True)
+with h_c1: st.markdown("<small style='color:#888'>名称</small>", unsafe_allow_html=True)
+with h_c2: st.markdown("<small style='color:#888'>最新价</small>", unsafe_allow_html=True)
+with h_c3: st.markdown("<small style='color:#888'>涨跌幅</small>", unsafe_allow_html=True)
+with h_c4: st.markdown("<small style='color:#888'>实时溢价 (EST)</small>", unsafe_allow_html=True)
+
 _monitor_dict = {item["code"]: item for item in MONITOR_LIST}
 
 for _, row in df.iterrows():
-    etf_code   = row["代码"]
-    etf_name   = row["名称"]
-    item       = _monitor_dict.get(etf_code)
-    if not item:
-        continue
-    etf_prefix = item["prefix"]
-
-    with st.expander(f"📊 查看 {etf_name} ({etf_code}) 历史折溢价走势"):
-        btn_key = f"load_chart_{etf_code}"
-        if st.button("加载走势图", key=btn_key):
-            with st.spinner(f"正在获取 {etf_code} 的历史数据（首次约需 5–10 秒，之后命中缓存秒开）..."):
+    code   = row["代码"]
+    name   = row["名称"]
+    cat    = row["分类"]
+    price  = row["最新价"]
+    pct    = row["涨跌幅(%)"]
+    prem   = row["实时溢价(EST)"]
+    item   = _monitor_dict.get(code)
+    prefix = item["prefix"] if item else "sh"
+    
+    # 状态判定
+    p_status = "🔴 溢" if prem > 0 else "🟢 折"
+    p_color  = "#ef4444" if prem > 0 else "#2ca02c"
+    cat_icon = "🇺🇸" if cat == "标普" else "💻"
+    
+    # 构造摘要行 (Expander 标题)
+    # 尽量保持对齐：[分类] 代码 | 名称 | 价格 | 涨跌 | 溢价
+    label = f"{cat_icon} {code} | {name[:8]} | {price:.3f} | {pct:+.2f}% | {p_status} {prem:+.2f}%"
+    
+    with st.expander(label):
+        # 第一层：更多行情指标
+        m1, m2, m3, m4 = st.columns(4)
+        m1.metric("估值 (EST)", f"{row['估值(EST)']:.3f}")
+        m2.metric("涨跌幅 (%)", f"{pct:+.2f}%")
+        m3.metric("实时溢价 (EST)", f"{prem:+.2f}%", delta=f"{prem-row['券商参考溢价']:.2f}% (较参考)", delta_color="inverse")
+        m4.metric("资产净值", f"{row['资产净值']:.2f} 亿")
+        
+        st.markdown(f"""
+        <div style='background:#fcfcfc; border-radius:8px; padding:10px; margin:10px 0; border: 1px solid #eee;'>
+            <small style='color:#888;'>券商参考溢价：<b>{row['券商参考溢价']:+.2f}%</b> | 分类：{cat} | 全称：{name}</small>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        # 第二层：历史走势图 (懒加载)
+        btn_key = f"load_integrated_{code}"
+        if st.button("加载历史折溢价走势图", key=btn_key, type="primary"):
+            with st.spinner(f"获取 {code} 历史数据中..."):
                 try:
-                    df_hist = get_clean_premium_data(etf_code, etf_prefix)
+                    df_hist = get_clean_premium_data(code, prefix)
                     if df_hist.empty:
-                        st.warning(f"{etf_code} 暂无可用历史净值数据，请稍后再试。")
+                        st.warning("暂无历史净值数据。")
                     else:
-                        fig = plot_premium_chart(df_hist, etf_name, etf_code)
+                        # 走势图
+                        fig = plot_premium_chart(df_hist, name, code)
                         st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
-                        latest_premium = df_hist['premium_rate'].iloc[-1]
-                        avg_premium    = df_hist['premium_rate'].mean()
-                        max_premium    = df_hist['premium_rate'].max()
-                        min_premium    = df_hist['premium_rate'].min()
-                        c_s1, c_s2, c_s3, c_s4 = st.columns(4)
-                        c_s1.metric("最新折溢价率", f"{latest_premium:+.2f}%")
-                        c_s2.metric("近一年均值",   f"{avg_premium:+.2f}%")
-                        c_s3.metric("近一年最高",   f"{max_premium:+.2f}%")
-                        c_s4.metric("近一年最低",   f"{min_premium:+.2f}%")
+                        
+                        # 历史统计
+                        latest_h = df_hist['premium_rate'].iloc[-1]
+                        avg_h    = df_hist['premium_rate'].mean()
+                        max_h    = df_hist['premium_rate'].max()
+                        min_h    = df_hist['premium_rate'].min()
+                        
+                        s1, s2, s3, s4 = st.columns(4)
+                        s1.metric("昨日折溢价", f"{latest_h:+.2f}%")
+                        s2.metric("近一年均值", f"{avg_h:+.2f}%")
+                        s3.metric("一年最高",   f"{max_h:+.2f}%")
+                        s4.metric("一年最低",   f"{min_h:+.2f}%")
                 except Exception as e:
-                    st.error(f"数据获取失败：{e}")
+                    st.error(f"加载失败: {e}")
 
 # ===============================
 # 10. 底栏
