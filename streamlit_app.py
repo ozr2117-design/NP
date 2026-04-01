@@ -13,43 +13,30 @@ import warnings
 warnings.filterwarnings('ignore')
 
 
-def _setup_mpl_chinese_font():
-    """
-    直接加载字体文件（而非仅依赖字体名匹配），很就展现中文内容不乱码。
-    Windows 常见路径按优先级排序，首个存在的文件即生效。
-    """
-    # Windows 常见字体文件路径
-    win_candidates = [
-        r"C:\Windows\Fonts\msyh.ttc",      # 微软雅黑
-        r"C:\Windows\Fonts\msyhbd.ttc",    # 微软雅黑 Bold
-        r"C:\Windows\Fonts\simhei.ttf",    # 黑体
-        r"C:\Windows\Fonts\simsun.ttc",    # 宋体
-    ]
-    # Linux/Mac 备用路径（部署到 Streamlit Cloud 时）
-    linux_candidates = [
-        "/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc",
-        "/usr/share/fonts/truetype/arphic/uming.ttc",
-        "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
-        "/usr/share/fonts/noto-cjk/NotoSansCJK-Regular.ttc",
-        "/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc",
-    ]
-
-    for path in win_candidates + linux_candidates:
-        if os.path.exists(path):
-            _fm.fontManager.addfont(path)           # 直接注册字体文件
-            prop = _fm.FontProperties(fname=path)   # 取到真实字体家族名
-            font_name = prop.get_name()
-            plt.rcParams['font.sans-serif'] = [font_name] + plt.rcParams.get('font.sans-serif', [])
-            plt.rcParams['axes.unicode_minus'] = False
-            return  # 找到一个就止
-
-    # 最后已没有字体文件时，退化为字体名匹配（不小心变乱）
-    plt.rcParams['font.sans-serif'] = ['SimHei', 'Microsoft YaHei', 'WenQuanYi Zen Hei',
-                                       'Arial Unicode MS', 'DejaVu Sans']
-    plt.rcParams['axes.unicode_minus'] = False
+# 字体候选文件路径（Windows 优先，其次 Linux/Mac）
+_CN_FONT_PATHS = [
+    r"C:\Windows\Fonts\msyh.ttc",
+    r"C:\Windows\Fonts\msyhbd.ttc",
+    r"C:\Windows\Fonts\simhei.ttf",
+    r"C:\Windows\Fonts\simsun.ttc",
+    "/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc",
+    "/usr/share/fonts/truetype/arphic/uming.ttc",
+    "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
+    "/usr/share/fonts/noto-cjk/NotoSansCJK-Regular.ttc",
+]
+_CN_FONT_FILE = next((p for p in _CN_FONT_PATHS if os.path.exists(p)), None)
 
 
-_setup_mpl_chinese_font()
+def _get_cn_fp(size: int = 11) -> _fm.FontProperties:
+    """直接按文件路径创建 FontProperties，彻底绕过字体名识别和缓存。"""
+    if _CN_FONT_FILE:
+        return _fm.FontProperties(fname=_CN_FONT_FILE, size=size)
+    return _fm.FontProperties(size=size)   # 找不到时压默认
+
+
+# 为小数点、负号这类 ASCII 字符保留 unicode_minus 修复
+plt.rcParams['axes.unicode_minus'] = False
+
 
 st.set_page_config(
     page_title="SPX & NASDAQ ETF 实时溢价监控",
@@ -208,8 +195,13 @@ def get_clean_premium_data(symbol: str, prefix: str = "sh"):
 
 
 def plot_premium_chart(df: pd.DataFrame, etf_name: str, etf_code: str):
-    """根据清洗后的 DataFrame 绘制折溢价率走势图，返回 matplotlib Figure。"""
-    _setup_mpl_chinese_font()          # 确保绘图前字体已注册（防热重载丢失）
+    """根据清洗后的 DataFrame 绘制折溢价率走势图。
+    使用 FontProperties(fname=...) 直接传入每个文字元素，彻底解决中文乱码问题。
+    """ 
+    fp11 = _get_cn_fp(size=11)
+    fp14 = _get_cn_fp(size=14)
+    fp10 = _get_cn_fp(size=10)
+
     fig, ax = plt.subplots(figsize=(14, 5))
 
     ax.plot(df['date'], df['premium_rate'],
@@ -225,12 +217,15 @@ def plot_premium_chart(df: pd.DataFrame, etf_name: str, etf_code: str):
     ax.axhline(y=0, color='red', linestyle='--', linewidth=1.8,
                label='0% 基准线（理论平价）')
 
-    ax.set_title(f'过去一年 {etf_code} ({etf_name}) 真实折溢价率走势',
-                 fontsize=14, pad=12)
-    ax.set_ylabel('折溢价率 (%)', fontsize=11)
-    ax.set_xlabel('交易日期', fontsize=11)
+    # 直接传入 fontproperties，100% 不依赖 rcParams 字体名匹配
+    ax.set_title(
+        f'过去一年 {etf_code} ({etf_name}) 真实折溢价率走势',
+        fontproperties=fp14, pad=12
+    )
+    ax.set_ylabel('折溢价率 (%)', fontproperties=fp11)
+    ax.set_xlabel('交易日期',   fontproperties=fp11)
     ax.grid(axis='y', linestyle=':', alpha=0.6)
-    ax.legend(fontsize=10)
+    ax.legend(prop=fp10)   # legend 用 prop= 不是 fontsize=
 
     ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m-%d'))
     ax.xaxis.set_major_locator(mdates.AutoDateLocator())
@@ -497,18 +492,20 @@ st.dataframe(styled, use_container_width=True, hide_index=True)
 st.markdown("---")
 st.markdown("""
 <div style='font-size:15px; font-weight:700; margin-bottom:10px;'>
-    📈 历史折溢价率走势图（点击展开后手动加载，避免卡顿）
+    📈 历史折溢价率走势图（阅表顺序·点击展开后手动加载，避免卡顿）
 </div>
 """, unsafe_allow_html=True)
 
-for item in MONITOR_LIST:
-    etf_code = item["code"]
+# expander 顺序跟随表格排序（df 已按标普/纳指分组、各组内按溢价率升序排列）
+_monitor_dict = {item["code"]: item for item in MONITOR_LIST}
+
+for _, row in df.iterrows():
+    etf_code   = row["代码"]
+    etf_name   = row["名称"]
+    item       = _monitor_dict.get(etf_code)
+    if not item:
+        continue
     etf_prefix = item["prefix"]
-    # 优先用实时行情里拿到的名称，否则回退到 short
-    etf_name = (
-        data_etf.get(etf_code, {}).get("name")
-        or item["short"]
-    )
 
     with st.expander(f"📊 查看 {etf_name} ({etf_code}) 历史折溢价走势"):
         btn_key = f"load_chart_{etf_code}"
@@ -521,8 +518,7 @@ for item in MONITOR_LIST:
                     else:
                         fig = plot_premium_chart(df_hist, etf_name, etf_code)
                         st.pyplot(fig)
-                        plt.close(fig)   # 释放内存
-                        # 显示简要统计
+                        plt.close(fig)
                         latest_premium = df_hist['premium_rate'].iloc[-1]
                         avg_premium    = df_hist['premium_rate'].mean()
                         max_premium    = df_hist['premium_rate'].max()
