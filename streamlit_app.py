@@ -341,9 +341,9 @@ def color_category(val):
 display_cols = ["代码", "名称", "分类", "最新价", "估值(EST)", "涨跌幅(%)", "实时溢价(EST)", "券商参考溢价", "资产净值"]
 
 styled = df[display_cols].style \
-    .applymap(color_premium,  subset=["实时溢价(EST)", "券商参考溢价"]) \
-    .applymap(color_pct,      subset=["涨跌幅(%)"]) \
-    .applymap(color_category, subset=["分类"]) \
+    .map(color_premium,  subset=["实时溢价(EST)", "券商参考溢价"]) \
+    .map(color_pct,      subset=["涨跌幅(%)"]) \
+    .map(color_category, subset=["分类"]) \
     .format({
         "最新价":         "{:.3f}",
         "估值(EST)":      "{:.3f}",
