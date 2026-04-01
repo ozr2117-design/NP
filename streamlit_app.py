@@ -5,6 +5,14 @@ import time
 from datetime import datetime
 import pytz
 from streamlit_autorefresh import st_autorefresh
+import matplotlib.pyplot as plt
+import matplotlib.dates as mdates
+import warnings
+warnings.filterwarnings('ignore')
+
+# 中文字体支持（防乱码）
+plt.rcParams['font.sans-serif'] = ['SimHei', 'Arial Unicode MS', 'Microsoft YaHei']
+plt.rcParams['axes.unicode_minus'] = False
 
 st.set_page_config(
     page_title="SPX & NASDAQ ETF 实时溢价监控",
@@ -102,6 +110,96 @@ def fetch_market_data():
             except: continue
         return result
     except: return {}
+
+# ===============================
+# 3b. 历史折溢价率数据获取（缓存12小时）
+# ===============================
+@st.cache_data(ttl=43200, show_spinner=False)
+def get_clean_premium_data(symbol: str, prefix: str = "sh"):
+    """获取并清洗指定 ETF 过去一年的历史折溢价率数据。
+    使用 ttl=43200 (12h) 缓存，避免重复调用 API。
+    """
+    import akshare as ak
+
+    # ── 场内日线收盘价（新浪源，规避东方财富 IP 风控）──
+    df_price = ak.fund_etf_hist_sina(symbol=f"{prefix}{symbol}")
+    df_price = df_price[['date', 'close']]
+    df_price['date'] = pd.to_datetime(df_price['date'])
+
+    one_year_ago = pd.Timestamp.now() - pd.DateOffset(days=365)
+    df_price = df_price[df_price['date'] >= one_year_ago]
+
+    time.sleep(0.5)   # 防反爬熔断
+
+    # ── 基金净值（东方财富）──
+    df_nav = ak.fund_open_fund_info_em(symbol=symbol, indicator="单位净值走势")
+    df_nav = df_nav[['净值日期', '单位净值']].rename(
+        columns={'净值日期': 'date', '单位净值': 'nav'}
+    )
+    df_nav['date'] = pd.to_datetime(df_nav['date'])
+    df_nav['nav'] = pd.to_numeric(df_nav['nav'], errors='coerce')
+
+    # ── QDII 时差对齐：T日价格 对齐 T-1日净值 ──
+    df_nav = df_nav.sort_values('date')
+    df_nav['nav_shifted'] = df_nav['nav'].shift(1)
+    df_nav['nav_date']    = df_nav['date'].shift(1)
+
+    df = pd.merge(
+        df_price,
+        df_nav[['date', 'nav_shifted', 'nav_date']],
+        on='date', how='left'
+    )
+    df['nav_shifted'] = df['nav_shifted'].ffill()
+    df['nav_date']    = df['nav_date'].ffill()
+    df = df.dropna(subset=['nav_shifted', 'nav_date', 'close'])
+
+    df['premium_rate'] = (df['close'] - df['nav_shifted']) / df['nav_shifted'] * 100
+
+    # 暴力剔除接口故障脏数据
+    df = df[(df['premium_rate'] <= 15) & (df['premium_rate'] >= -15)]
+
+    # ── 数据质量双重拦截 ──
+    df['date_diff'] = (df['date'] - df['nav_date']).dt.days
+    df = df[df['date_diff'] <= 4]
+
+    if not df.empty:
+        latest = df.iloc[-1]
+        if latest['date'].dayofweek in [1, 2, 3, 4] and latest['date_diff'] > 1:
+            df = df.iloc[:-1]
+
+    return df
+
+
+def plot_premium_chart(df: pd.DataFrame, etf_name: str, etf_code: str):
+    """根据清洗后的 DataFrame 绘制折溢价率走势图，返回 matplotlib Figure。"""
+    fig, ax = plt.subplots(figsize=(14, 5))
+
+    ax.plot(df['date'], df['premium_rate'],
+            color='#4CAF50', linewidth=1.5, label='每日折溢价率 (%)')
+
+    ax.fill_between(df['date'], df['premium_rate'], 0,
+                    where=(df['premium_rate'] >= 0),
+                    color='#FFCDD2', alpha=0.5)
+    ax.fill_between(df['date'], df['premium_rate'], 0,
+                    where=(df['premium_rate'] < 0),
+                    color='#C8E6C9', alpha=0.5)
+
+    ax.axhline(y=0, color='red', linestyle='--', linewidth=1.8,
+               label='0% 基准线（理论平价）')
+
+    ax.set_title(f'过去一年 {etf_code} ({etf_name}) 真实折溢价率走势',
+                 fontsize=14, pad=12)
+    ax.set_ylabel('折溢价率 (%)', fontsize=11)
+    ax.set_xlabel('交易日期', fontsize=11)
+    ax.grid(axis='y', linestyle=':', alpha=0.6)
+    ax.legend(fontsize=10)
+
+    ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m-%d'))
+    ax.xaxis.set_major_locator(mdates.AutoDateLocator())
+    plt.xticks(rotation=45)
+    fig.tight_layout()
+    return fig
+
 
 # ===============================
 # 4. 构建数据表 (计算实时预估估值)
@@ -354,6 +452,50 @@ styled = df[display_cols].style \
     })
 
 st.dataframe(styled, use_container_width=True, hide_index=True)
+
+# ===============================
+# 9b. 历史折溢价走势图（懒加载）
+# ===============================
+st.markdown("---")
+st.markdown("""
+<div style='font-size:15px; font-weight:700; margin-bottom:10px;'>
+    📈 历史折溢价率走势图（点击展开后手动加载，避免卡顿）
+</div>
+""", unsafe_allow_html=True)
+
+for item in MONITOR_LIST:
+    etf_code = item["code"]
+    etf_prefix = item["prefix"]
+    # 优先用实时行情里拿到的名称，否则回退到 short
+    etf_name = (
+        data_etf.get(etf_code, {}).get("name")
+        or item["short"]
+    )
+
+    with st.expander(f"📊 查看 {etf_name} ({etf_code}) 历史折溢价走势"):
+        btn_key = f"load_chart_{etf_code}"
+        if st.button("加载走势图", key=btn_key):
+            with st.spinner(f"正在获取 {etf_code} 的历史数据（首次约需 5–10 秒，之后命中缓存秒开）..."):
+                try:
+                    df_hist = get_clean_premium_data(etf_code, etf_prefix)
+                    if df_hist.empty:
+                        st.warning(f"{etf_code} 暂无可用历史净值数据，请稍后再试。")
+                    else:
+                        fig = plot_premium_chart(df_hist, etf_name, etf_code)
+                        st.pyplot(fig)
+                        plt.close(fig)   # 释放内存
+                        # 显示简要统计
+                        latest_premium = df_hist['premium_rate'].iloc[-1]
+                        avg_premium    = df_hist['premium_rate'].mean()
+                        max_premium    = df_hist['premium_rate'].max()
+                        min_premium    = df_hist['premium_rate'].min()
+                        c_s1, c_s2, c_s3, c_s4 = st.columns(4)
+                        c_s1.metric("最新折溢价率", f"{latest_premium:+.2f}%")
+                        c_s2.metric("近一年均值",   f"{avg_premium:+.2f}%")
+                        c_s3.metric("近一年最高",   f"{max_premium:+.2f}%")
+                        c_s4.metric("近一年最低",   f"{min_premium:+.2f}%")
+                except Exception as e:
+                    st.error(f"数据获取失败：{e}")
 
 # ===============================
 # 10. 底栏
