@@ -2,17 +2,54 @@ import streamlit as st
 import pandas as pd
 import requests
 import time
+import os
 from datetime import datetime
 import pytz
 from streamlit_autorefresh import st_autorefresh
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
+import matplotlib.font_manager as _fm
 import warnings
 warnings.filterwarnings('ignore')
 
-# 中文字体支持（防乱码）
-plt.rcParams['font.sans-serif'] = ['SimHei', 'Arial Unicode MS', 'Microsoft YaHei']
-plt.rcParams['axes.unicode_minus'] = False
+
+def _setup_mpl_chinese_font():
+    """
+    直接加载字体文件（而非仅依赖字体名匹配），很就展现中文内容不乱码。
+    Windows 常见路径按优先级排序，首个存在的文件即生效。
+    """
+    # Windows 常见字体文件路径
+    win_candidates = [
+        r"C:\Windows\Fonts\msyh.ttc",      # 微软雅黑
+        r"C:\Windows\Fonts\msyhbd.ttc",    # 微软雅黑 Bold
+        r"C:\Windows\Fonts\simhei.ttf",    # 黑体
+        r"C:\Windows\Fonts\simsun.ttc",    # 宋体
+    ]
+    # Linux/Mac 备用路径（部署到 Streamlit Cloud 时）
+    linux_candidates = [
+        "/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc",
+        "/usr/share/fonts/truetype/arphic/uming.ttc",
+        "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
+        "/usr/share/fonts/noto-cjk/NotoSansCJK-Regular.ttc",
+        "/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc",
+    ]
+
+    for path in win_candidates + linux_candidates:
+        if os.path.exists(path):
+            _fm.fontManager.addfont(path)           # 直接注册字体文件
+            prop = _fm.FontProperties(fname=path)   # 取到真实字体家族名
+            font_name = prop.get_name()
+            plt.rcParams['font.sans-serif'] = [font_name] + plt.rcParams.get('font.sans-serif', [])
+            plt.rcParams['axes.unicode_minus'] = False
+            return  # 找到一个就止
+
+    # 最后已没有字体文件时，退化为字体名匹配（不小心变乱）
+    plt.rcParams['font.sans-serif'] = ['SimHei', 'Microsoft YaHei', 'WenQuanYi Zen Hei',
+                                       'Arial Unicode MS', 'DejaVu Sans']
+    plt.rcParams['axes.unicode_minus'] = False
+
+
+_setup_mpl_chinese_font()
 
 st.set_page_config(
     page_title="SPX & NASDAQ ETF 实时溢价监控",
@@ -172,6 +209,7 @@ def get_clean_premium_data(symbol: str, prefix: str = "sh"):
 
 def plot_premium_chart(df: pd.DataFrame, etf_name: str, etf_code: str):
     """根据清洗后的 DataFrame 绘制折溢价率走势图，返回 matplotlib Figure。"""
+    _setup_mpl_chinese_font()          # 确保绘图前字体已注册（防热重载丢失）
     fig, ax = plt.subplots(figsize=(14, 5))
 
     ax.plot(df['date'], df['premium_rate'],
