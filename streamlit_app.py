@@ -124,8 +124,9 @@ def get_clean_premium_data(symbol: str, prefix: str = "sh"):
     df_price = df_price[['date', 'close']]
     df_price['date'] = pd.to_datetime(df_price['date'])
 
-    one_year_ago = pd.Timestamp.now() - pd.DateOffset(days=365)
-    df_price = df_price[df_price['date'] >= one_year_ago]
+    # 两年历史深度 (730天)
+    two_years_ago = pd.Timestamp.now() - pd.DateOffset(days=730)
+    df_price = df_price[df_price['date'] >= two_years_ago]
 
     time.sleep(0.5)   # 防反爬熔断
 
@@ -215,15 +216,33 @@ def plot_premium_chart(df: pd.DataFrame, etf_name: str, etf_code: str):
             text=f"过去一年 {etf_code} ({etf_name}) 真实折溢价率走势",
             x=0.5, xanchor='center', font=dict(size=16)
         ),
-        xaxis=dict(title="交易日期", showgrid=True, gridcolor='rgba(0,0,0,0.05)', tickformat='%Y-%m-%d'),
+        xaxis=dict(
+            title="交易日期", showgrid=True, gridcolor='rgba(0,0,0,0.05)', tickformat='%Y-%m-%d',
+            rangeselector=dict(
+                buttons=list([
+                    dict(count=1, label="1年", step="year", stepmode="backward"),
+                    dict(count=2, label="2年", step="year", stepmode="backward"),
+                    dict(step="all", label="全部")
+                ]),
+                font=dict(size=11),
+                x=0, y=1.05
+            ),
+            rangeslider=dict(visible=True, thickness=0.05),
+            type="date"
+        ),
         yaxis=dict(title="折溢价率 (%)", showgrid=True, gridcolor='rgba(0,0,0,0.05)'),
         hovermode="x unified",
         plot_bgcolor='rgba(0,0,0,0)',
         paper_bgcolor='rgba(0,0,0,0)',
-        margin=dict(l=40, r=40, t=60, b=40),
-        height=450,
+        margin=dict(l=40, r=40, t=80, b=40),
+        height=500,
         showlegend=False
     )
+    
+    # 默认展示最近 1 年 (365天)，用户可通过按钮切换到 2 年
+    one_year_ago_date = df['date'].max() - pd.DateOffset(days=365)
+    fig.update_xaxes(range=[one_year_ago_date, df['date'].max()])
+
     return fig
 
 
