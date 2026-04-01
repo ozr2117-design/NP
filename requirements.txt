@@ -5,3 +5,4 @@ pytz>=2023.3
 streamlit-autorefresh>=1.0.1
 akshare>=1.14.0
 matplotlib>=3.8.0
+plotly>=5.0.0

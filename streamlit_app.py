@@ -6,36 +6,10 @@ import os
 from datetime import datetime
 import pytz
 from streamlit_autorefresh import st_autorefresh
-import matplotlib.pyplot as plt
-import matplotlib.dates as mdates
-import matplotlib.font_manager as _fm
+import plotly.graph_objects as go
+import plotly.express as px
 import warnings
 warnings.filterwarnings('ignore')
-
-
-# 字体候选文件路径（Windows 优先，其次 Linux/Mac）
-_CN_FONT_PATHS = [
-    r"C:\Windows\Fonts\msyh.ttc",
-    r"C:\Windows\Fonts\msyhbd.ttc",
-    r"C:\Windows\Fonts\simhei.ttf",
-    r"C:\Windows\Fonts\simsun.ttc",
-    "/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc",
-    "/usr/share/fonts/truetype/arphic/uming.ttc",
-    "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
-    "/usr/share/fonts/noto-cjk/NotoSansCJK-Regular.ttc",
-]
-_CN_FONT_FILE = next((p for p in _CN_FONT_PATHS if os.path.exists(p)), None)
-
-
-def _get_cn_fp(size: int = 11) -> _fm.FontProperties:
-    """直接按文件路径创建 FontProperties，彻底绕过字体名识别和缓存。"""
-    if _CN_FONT_FILE:
-        return _fm.FontProperties(fname=_CN_FONT_FILE, size=size)
-    return _fm.FontProperties(size=size)   # 找不到时压默认
-
-
-# 为小数点、负号这类 ASCII 字符保留 unicode_minus 修复
-plt.rcParams['axes.unicode_minus'] = False
 
 
 st.set_page_config(
@@ -195,42 +169,61 @@ def get_clean_premium_data(symbol: str, prefix: str = "sh"):
 
 
 def plot_premium_chart(df: pd.DataFrame, etf_name: str, etf_code: str):
-    """根据清洗后的 DataFrame 绘制折溢价率走势图。
-    使用 FontProperties(fname=...) 直接传入每个文字元素，彻底解决中文乱码问题。
-    """ 
-    fp11 = _get_cn_fp(size=11)
-    fp14 = _get_cn_fp(size=14)
-    fp10 = _get_cn_fp(size=10)
+    """根据清洗后的 DataFrame 使用 Plotly 绘制互动式折溢价率走势图。
+    Plotly 在浏览器端渲染，能完美支持中文显示。
+    """
+    fig = go.Figure()
 
-    fig, ax = plt.subplots(figsize=(14, 5))
+    # 1. 绘制溢价区域 (填充红色)
+    df_premium = df.copy()
+    df_premium.loc[df_premium['premium_rate'] < 0, 'premium_rate'] = 0
+    fig.add_trace(go.Scatter(
+        x=df_premium['date'], y=df_premium['premium_rate'],
+        fill='tozeroy', fillcolor='rgba(255, 205, 210, 0.5)',
+        line=dict(color='#ef4444', width=0),
+        name='溢价', hoverinfo='skip'
+    ))
 
-    ax.plot(df['date'], df['premium_rate'],
-            color='#4CAF50', linewidth=1.5, label='每日折溢价率 (%)')
+    # 2. 绘制折价区域 (填充绿色)
+    df_discount = df.copy()
+    df_discount.loc[df_discount['premium_rate'] > 0, 'premium_rate'] = 0
+    fig.add_trace(go.Scatter(
+        x=df_discount['date'], y=df_discount['premium_rate'],
+        fill='tozeroy', fillcolor='rgba(200, 230, 201, 0.5)',
+        line=dict(color='#2ca02c', width=0),
+        name='折价', hoverinfo='skip'
+    ))
 
-    ax.fill_between(df['date'], df['premium_rate'], 0,
-                    where=(df['premium_rate'] >= 0),
-                    color='#FFCDD2', alpha=0.5)
-    ax.fill_between(df['date'], df['premium_rate'], 0,
-                    where=(df['premium_rate'] < 0),
-                    color='#C8E6C9', alpha=0.5)
+    # 3. 绘制主线
+    fig.add_trace(go.Scatter(
+        x=df['date'], y=df['premium_rate'],
+        mode='lines',
+        line=dict(color='#4CAF50', width=1.8),
+        name='折溢价率 (%)',
+        hovertemplate='%{x|%Y-%m-%d}<br>折溢价率: %{y:.2f}%<extra></extra>'
+    ))
 
-    ax.axhline(y=0, color='red', linestyle='--', linewidth=1.8,
-               label='0% 基准线（理论平价）')
-
-    # 直接传入 fontproperties，100% 不依赖 rcParams 字体名匹配
-    ax.set_title(
-        f'过去一年 {etf_code} ({etf_name}) 真实折溢价率走势',
-        fontproperties=fp14, pad=12
+    # 4. 绘制0轴基准线
+    fig.add_shape(
+        type="line", x0=df['date'].min(), x1=df['date'].max(), y0=0, y1=0,
+        line=dict(color="red", width=1.5, dash="dash"),
     )
-    ax.set_ylabel('折溢价率 (%)', fontproperties=fp11)
-    ax.set_xlabel('交易日期',   fontproperties=fp11)
-    ax.grid(axis='y', linestyle=':', alpha=0.6)
-    ax.legend(prop=fp10)   # legend 用 prop= 不是 fontsize=
 
-    ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m-%d'))
-    ax.xaxis.set_major_locator(mdates.AutoDateLocator())
-    plt.xticks(rotation=45)
-    fig.tight_layout()
+    # 5. 布局优化
+    fig.update_layout(
+        title=dict(
+            text=f"过去一年 {etf_code} ({etf_name}) 真实折溢价率走势",
+            x=0.5, xanchor='center', font=dict(size=16)
+        ),
+        xaxis=dict(title="交易日期", showgrid=True, gridcolor='rgba(0,0,0,0.05)', tickformat='%Y-%m-%d'),
+        yaxis=dict(title="折溢价率 (%)", showgrid=True, gridcolor='rgba(0,0,0,0.05)'),
+        hovermode="x unified",
+        plot_bgcolor='rgba(0,0,0,0)',
+        paper_bgcolor='rgba(0,0,0,0)',
+        margin=dict(l=40, r=40, t=60, b=40),
+        height=450,
+        showlegend=False
+    )
     return fig
 
 
@@ -517,8 +510,7 @@ for _, row in df.iterrows():
                         st.warning(f"{etf_code} 暂无可用历史净值数据，请稍后再试。")
                     else:
                         fig = plot_premium_chart(df_hist, etf_name, etf_code)
-                        st.pyplot(fig)
-                        plt.close(fig)
+                        st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
                         latest_premium = df_hist['premium_rate'].iloc[-1]
                         avg_premium    = df_hist['premium_rate'].mean()
                         max_premium    = df_hist['premium_rate'].max()
