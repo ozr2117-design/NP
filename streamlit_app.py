@@ -49,10 +49,10 @@ st.sidebar.markdown("---")
 st.sidebar.markdown(f"""
 <div style='background:#fef3cd; padding:10px; border-radius:8px;'>
     <div style='font-size:13px; color:#856404; margin-bottom:5px;'>💡 临界买入溢价率 (南向通等效溢价)</div>
-    <div style='font-size:24px; font-weight:bold; color:#d97706;'>{{breakeven_prem_pct:.2f}}%</div>
+    <div style='font-size:24px; font-weight:bold; color:#d97706;'>{breakeven_prem_pct:.2f}%</div>
     <div style='font-size:12px; color:#856404; margin-top:5px;'>
-        若场内溢价 <b>≤ {{breakeven_prem_pct:.2f}}%</b>，买场内ETF<br>
-        若场内溢价 <b>> {{breakeven_prem_pct:.2f}}%</b>，买南向通基金
+        若场内溢价 <b>≤ {breakeven_prem_pct:.2f}%</b>，买场内ETF<br>
+        若场内溢价 <b>> {breakeven_prem_pct:.2f}%</b>，买南向通基金
     </div>
 </div>
 """, unsafe_allow_html=True)
