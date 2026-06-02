@@ -19,6 +19,45 @@ st.set_page_config(
 )
 
 # ===============================
+# 0. 投资假设参数调节 (侧边栏)
+# ===============================
+st.sidebar.markdown("## ⚙️ 场内 vs 南向通 决策参数")
+st.sidebar.info("南向通免溢价但有20%利润税和1.5%管理费。此工具计算在特定预期下，**场内ETF溢价达到多少时，买南向通更划算**。")
+
+hold_time_options = {
+    "1个月": 1/12, "3个月": 3/12, "半年": 0.5, "1年": 1.0, 
+    "2年": 2.0, "3年": 3.0, "5年": 5.0, "10年": 10.0
+}
+hold_time_label = st.sidebar.select_slider("预期持有时间", options=list(hold_time_options.keys()), value="3个月")
+T_years = hold_time_options[hold_time_label]
+
+exp_return = st.sidebar.slider("指数预期年化收益率 (%)", min_value=1, max_value=40, value=20, step=1) / 100.0
+exp_sell_prem = st.sidebar.slider("预期卖出时的场内溢价率 (%)", min_value=-5, max_value=10, value=0, step=1) / 100.0
+
+with st.sidebar.expander("高级费率设置"):
+    m_dom = st.number_input("场内ETF年管理费+托管费(%)", value=0.6, step=0.1) / 100.0
+    m_south = st.number_input("南向通年管理费(%)", value=1.5, step=0.1) / 100.0
+    tax_rate = st.number_input("南向通利润税率(%)", value=20.0, step=1.0) / 100.0
+
+g_dom = (1 + exp_return - m_dom) ** T_years
+g_south = (1 + exp_return - m_south) ** T_years
+v_south_ratio = 1 + (1 - tax_rate) * (g_south - 1)
+breakeven_prem_rate = ((1 + exp_sell_prem) * g_dom / v_south_ratio) - 1
+breakeven_prem_pct = breakeven_prem_rate * 100
+
+st.sidebar.markdown("---")
+st.sidebar.markdown(f"""
+<div style='background:#fef3cd; padding:10px; border-radius:8px;'>
+    <div style='font-size:13px; color:#856404; margin-bottom:5px;'>💡 临界买入溢价率 (南向通等效溢价)</div>
+    <div style='font-size:24px; font-weight:bold; color:#d97706;'>{{breakeven_prem_pct:.2f}}%</div>
+    <div style='font-size:12px; color:#856404; margin-top:5px;'>
+        若场内溢价 <b>≤ {{breakeven_prem_pct:.2f}}%</b>，买场内ETF<br>
+        若场内溢价 <b>> {{breakeven_prem_pct:.2f}}%</b>，买南向通基金
+    </div>
+</div>
+""", unsafe_allow_html=True)
+
+# ===============================
 # 1. 监控 ETF 列表（含分类标记）
 # ===============================
 MONITOR_LIST = [
@@ -249,7 +288,7 @@ def plot_premium_chart(df: pd.DataFrame, etf_name: str, etf_code: str):
 # ===============================
 # 4. 构建数据表 (计算实时预估估值)
 # ===============================
-def build_df(data_etf, data_market):
+def build_df(data_etf, data_market, breakeven_prem_pct):
     rows = []
     
     # 提取市场因子 (百分比)
@@ -267,6 +306,8 @@ def build_df(data_etf, data_market):
         est_iopv = tx["t1_nav"] * (1 + (futures_pct + fx_pct) / 100)
         premium_rate = (tx["current"] / est_iopv - 1) * 100 if est_iopv > 0 else 0.0
 
+        advise = "💎场内" if premium_rate <= breakeven_prem_pct else "✈️南向通"
+
         rows.append({
             "代码":           item["code"],
             "名称":           tx.get("name") or item["short"],
@@ -275,6 +316,7 @@ def build_df(data_etf, data_market):
             "估值(EST)":      est_iopv,
             "涨跌幅(%)":      tx.get("percent", 0),
             "实时溢价(EST)":  premium_rate,
+            "最优渠道":       advise,
             "券商参考溢价":    tx.get("static_premium", 0.0),
             "资产净值":       tx.get("scale_yi", 0),
         })
@@ -379,7 +421,7 @@ _, c_fx, _ = st.columns([1, 8, 1])
 with c_fx:
     st.markdown(fx_html(data_market.get("USD/CNH")), unsafe_allow_html=True)
 
-df = build_df(data_etf, data_market)
+df = build_df(data_etf, data_market, breakeven_prem_pct)
 
 # --- 情绪指数判定 (基于实时溢价 EST) ---
 emotion_badge = ""
@@ -481,12 +523,18 @@ def color_category(val):
     elif val == "纳指": return "color:#b45309;font-weight:600"
     return ""
 
-display_cols = ["代码", "名称", "分类", "最新价", "估值(EST)", "涨跌幅(%)", "实时溢价(EST)", "券商参考溢价", "资产净值"]
+def color_advise(val):
+    if "场内" in val: return "background-color:#e8f0fe;color:#1a56db;font-weight:bold"
+    if "南向通" in val: return "background-color:#ffeedd;color:#d97706;font-weight:bold"
+    return ""
+
+display_cols = ["代码", "名称", "分类", "最新价", "估值(EST)", "涨跌幅(%)", "实时溢价(EST)", "最优渠道", "券商参考溢价", "资产净值"]
 
 styled = df[display_cols].style \
     .map(color_premium,  subset=["实时溢价(EST)", "券商参考溢价"]) \
     .map(color_pct,      subset=["涨跌幅(%)"]) \
     .map(color_category, subset=["分类"]) \
+    .map(color_advise,   subset=["最优渠道"]) \
     .format({
         "最新价":         "{:.3f}",
         "估值(EST)":      "{:.3f}",
