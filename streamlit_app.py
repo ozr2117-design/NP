@@ -165,7 +165,7 @@ def fetch_market_drawdown_data():
                 parts = line.split('"')[1].split("~")
                 name = "纳指100" if "NDX" in line else "标普500"
                 current = float(parts[3])
-                ath = float(parts[51])  # 52周最高价
+                ath = float(parts[48])  # 52周最高价
                 if ath > 0 and current > 0:
                     drawdown = ((current / ath) - 1) * 100
                     result[name] = {"ath": ath, "current": current, "drawdown": drawdown}
