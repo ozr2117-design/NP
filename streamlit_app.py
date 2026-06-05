@@ -151,31 +151,28 @@ def fetch_market_data():
         return result
     except: return {}
 
-@st.cache_data(ttl=43200, show_spinner=False)
+@st.cache_data(ttl=10, show_spinner=False)
 def fetch_market_drawdown_data():
-    """使用 yfinance 获取大盘高点回撤数据 (缓存12小时)"""
+    """从腾讯接口读取纳指和标普的大盘水位（回撤数据）"""
+    url = "http://qt.gtimg.cn/q=usNDX,usINX"
     try:
-        import yfinance as yf
-        data = yf.download(['^NDX', '^GSPC'], period='2y', progress=False)
-        if data.empty:
-            return {}
-        
-        highs = data['High']
-        closes = data['Close']
-        
+        res = requests.get(url, timeout=5)
+        text = res.content.decode("gbk")
         result = {}
-        for ticker, name in [('^NDX', '纳指100'), ('^GSPC', '标普500')]:
-            if ticker in highs.columns and ticker in closes.columns:
-                series_h = highs[ticker].dropna()
-                series_c = closes[ticker].dropna()
-                if not series_h.empty and not series_c.empty:
-                    ath = series_h.max()
-                    current = series_c.iloc[-1]
+        for line in text.split(";"):
+            if "~" not in line or "=" not in line: continue
+            try:
+                parts = line.split('"')[1].split("~")
+                name = "纳指100" if "NDX" in line else "标普500"
+                current = float(parts[3])
+                ath = float(parts[51])  # 52周最高价
+                if ath > 0 and current > 0:
                     drawdown = ((current / ath) - 1) * 100
                     result[name] = {"ath": ath, "current": current, "drawdown": drawdown}
+            except: continue
         return result
     except Exception as e:
-        print(f"yfinance error: {e}")
+        print(f"Tencent Drawdown fetch error: {e}")
         return {}
 
 # ===============================
