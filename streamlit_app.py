@@ -31,13 +31,16 @@ hold_time_options = {
 hold_time_label = st.sidebar.select_slider("预期持有时间", options=list(hold_time_options.keys()), value="3个月")
 T_years = hold_time_options[hold_time_label]
 
-exp_return = st.sidebar.slider("指数预期年化收益率 (%)", min_value=1, max_value=40, value=20, step=1) / 100.0
+period_return = st.sidebar.slider("期间预期总收益率 (%)", min_value=-30, max_value=100, value=10, step=1) / 100.0
 exp_sell_prem = st.sidebar.slider("预期卖出时的场内溢价率 (%)", min_value=-5, max_value=10, value=0, step=1) / 100.0
 
 with st.sidebar.expander("高级费率设置"):
     m_dom = st.number_input("场内ETF年管理费+托管费(%)", value=0.6, step=0.1) / 100.0
     m_south = st.number_input("南向通年管理费(%)", value=1.5, step=0.1) / 100.0
     tax_rate = st.number_input("南向通利润税率(%)", value=20.0, step=1.0) / 100.0
+
+# 将期间收益率转化为年化收益率，以保持费率复利计算的严谨性
+exp_return = (1 + period_return) ** (1 / T_years) - 1 if T_years > 0 else 0
 
 g_dom = (1 + exp_return - m_dom) ** T_years
 g_south = (1 + exp_return - m_south) ** T_years
