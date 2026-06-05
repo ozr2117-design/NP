@@ -457,7 +457,7 @@ def fx_html(data):
         <span class='fut-pct' style='color:{color}'>{pm}{data['percent']:.2f}%</span>
     </div>"""
 
-def drawdown_html(name, data):
+def drawdown_html(name, data, daily_pct=0.0):
     if not data: 
         return f"<div style='font-size:11px; color:#888; margin-top:8px;'>⚠️ {name} 雷达数据拉取超时，请稍后刷新重试...</div>"
     
@@ -477,7 +477,22 @@ def drawdown_html(name, data):
         state = "✅ 安全 (震荡/新高)"
         bg = "#f0fdf4"; tc = "#15803d"; border = "#bbf7d0"; icon = "💎 定投场内"
 
+    alert_html = ""
+    if daily_pct <= -1.5:
+        alert_html = f"""
+        <div style='margin-top:8px; padding:4px 6px; background:#fee2e2; border-left:3px solid #dc2626; border-radius:4px; animation: pulse 2s infinite;'>
+            <span style='font-size:11px; font-weight:700; color:#991b1b;'>⚡ 单日暴跌 {daily_pct:.2f}%：留意极高溢价套利！</span>
+        </div>
+        """
+
     return f"""
+    <style>
+    @keyframes pulse {{
+        0% {{ box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.4); }}
+        70% {{ box-shadow: 0 0 0 4px rgba(220, 38, 38, 0); }}
+        100% {{ box-shadow: 0 0 0 0 rgba(220, 38, 38, 0); }}
+    }}
+    </style>
     <div style='background:{bg}; border:1px solid {border}; border-radius:8px; padding:8px 12px; margin-top:8px; display:flex; flex-direction:column; justify-content:center;'>
         <div style='display:flex; justify-content:space-between; align-items:center;'>
             <span style='font-size:12px; font-weight:700; color:{tc};'>{name} 水位雷达</span>
@@ -488,17 +503,22 @@ def drawdown_html(name, data):
             <span style='font-size:11px; color:{tc}; margin-left:6px; opacity:0.8;'>(距历史最高点)</span>
         </div>
         <div style='font-size:12px; font-weight:700; color:{tc}; margin-top:2px;'>状态：{state}</div>
+        {alert_html}
     </div>
     """
 
 # --- 市场行情栏 ---
 c_f_left, c_f1, c_f2, c_f_right = st.columns([1, 4, 4, 1])
 with c_f1:
-    st.markdown(fut_html("NAS100 Fut", data_market.get("纳指期货")), unsafe_allow_html=True)
-    st.markdown(drawdown_html("纳指100", data_drawdown.get("纳指100")), unsafe_allow_html=True)
+    ndx_fut = data_market.get("纳指期货")
+    st.markdown(fut_html("NAS100 Fut", ndx_fut), unsafe_allow_html=True)
+    ndx_pct = ndx_fut['percent'] if ndx_fut else 0.0
+    st.markdown(drawdown_html("纳指100", data_drawdown.get("纳指100"), ndx_pct), unsafe_allow_html=True)
 with c_f2:
-    st.markdown(fut_html("SP500 Fut", data_market.get("标普期货")), unsafe_allow_html=True)
-    st.markdown(drawdown_html("标普500", data_drawdown.get("标普500")), unsafe_allow_html=True)
+    spx_fut = data_market.get("标普期货")
+    st.markdown(fut_html("SP500 Fut", spx_fut), unsafe_allow_html=True)
+    spx_pct = spx_fut['percent'] if spx_fut else 0.0
+    st.markdown(drawdown_html("标普500", data_drawdown.get("标普500"), spx_pct), unsafe_allow_html=True)
 
 # --- 交易状态 & 自动刷新 (中置显示预留) ---
 tz = pytz.timezone("Asia/Shanghai")
