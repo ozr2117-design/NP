@@ -13,7 +13,7 @@ warnings.filterwarnings('ignore')
 
 
 st.set_page_config(
-    page_title="SPX & NASDAQ ETF 实时溢价监控",
+    page_title="SPX & NASDAQ",
     page_icon="📊",
     layout="wide"
 )
@@ -416,7 +416,7 @@ body, .stApp { font-family: 'Inter', sans-serif; }
 .fx-label { font-size: 11px; color: #c53030; font-weight: 700; margin-right: 12px; }
 .fx-price { font-size: 13px; font-weight: 700; color: #1a1a1a; margin-right: 8px; }
 </style>
-<div class='main-title'>📊 SPX &amp; NASDAQ ETF 实时溢价监控</div>
+<div class='main-title'>📊 SPX &amp; NASDAQ</div>
 """, unsafe_allow_html=True)
 
 # ===============================
