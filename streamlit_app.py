@@ -152,7 +152,7 @@ def fetch_market_data():
     except: return {}
 
 @st.cache_data(ttl=43200, show_spinner=False)
-def fetch_index_drawdown():
+def fetch_market_drawdown_data():
     """使用 yfinance 获取大盘高点回撤数据 (缓存12小时)"""
     try:
         import yfinance as yf
@@ -174,7 +174,8 @@ def fetch_index_drawdown():
                     drawdown = ((current / ath) - 1) * 100
                     result[name] = {"ath": ath, "current": current, "drawdown": drawdown}
         return result
-    except:
+    except Exception as e:
+        print(f"yfinance error: {e}")
         return {}
 
 # ===============================
@@ -403,7 +404,11 @@ body, .stApp { font-family: 'Inter', sans-serif; }
 trading  = is_trading_time()
 data_etf = fetch_etf_data()
 data_market = fetch_market_data()
-data_drawdown = fetch_index_drawdown()
+data_drawdown = fetch_market_drawdown_data()
+
+if not data_drawdown:
+    # 若拉取失败，则清除空缓存，避免接下来 12 小时都拉不到数据
+    fetch_market_drawdown_data.clear()
 
 if not data_etf:
     st.error("数据加载失败，请检查网络。(Tencent API Error)")
@@ -432,7 +437,9 @@ def fx_html(data):
     </div>"""
 
 def drawdown_html(name, data):
-    if not data: return ""
+    if not data: 
+        return f"<div style='font-size:11px; color:#888; margin-top:8px;'>⚠️ {name} 雷达数据拉取超时，请稍后刷新重试...</div>"
+    
     dd = float(data['drawdown'])
     
     # 判定状态
