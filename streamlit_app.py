@@ -385,36 +385,55 @@ def build_df(data_etf, data_market, breakeven_prem_pct):
 # ===============================
 st.markdown("""
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
-body, .stApp { font-family: 'Inter', sans-serif; }
-.main-title  { font-size:22px; font-weight:700; text-align:center; margin-bottom:4px; }
-.subtitle    { font-size:12px; text-align:center; color:#888; margin-bottom:14px; }
-.section-hdr { font-size:13px; font-weight:600; color:#555; margin:8px 0 6px 0; }
-.badge-sp { display:inline-block; padding:2px 8px; border-radius:10px;
-            background:#e8f0fe; color:#1a56db; font-size:11px; font-weight:700; }
-.badge-nd { display:inline-block; padding:2px 8px; border-radius:10px;
-            background:#fef3cd; color:#b45309; font-size:11px; font-weight:700; }
+body, .stApp { 
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background-color: #fbfbfd;
+}
+.main-title  { font-size:24px; font-weight:700; letter-spacing:-0.5px; text-align:center; margin-bottom:4px; color:#1d1d1f; }
+.subtitle    { font-size:12px; text-align:center; color:#86868b; margin-bottom:14px; }
+.section-hdr { font-size:14px; font-weight:600; color:#1d1d1f; margin:12px 0 8px 0; letter-spacing:-0.3px; }
+.badge-sp { display:inline-block; padding:3px 10px; border-radius:12px;
+            background:#f0f4ff; color:#0066cc; font-size:11px; font-weight:600; }
+.badge-nd { display:inline-block; padding:3px 10px; border-radius:12px;
+            background:#fff7e6; color:#d97706; font-size:11px; font-weight:600; }
 .stat-card {
-    background: #f8f9fa; border-radius: 10px; padding: 8px 12px; min-width: 0;
+    background: #ffffff; 
+    border-radius: 14px; 
+    padding: 10px 14px; 
+    min-width: 0;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+    border: 1px solid rgba(0,0,0,0.02);
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
-.stat-label  { font-size: 10px; color: #888; margin-bottom: 1px; white-space: nowrap; }
-.stat-value  { font-size: 11px; font-weight: 600; color: #1a1a1a;
-               white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.stat-delta-up   { font-size: 11px; color: #d62728; margin-top:1px; }
-.stat-delta-down { font-size: 11px; color: #2ca02c; margin-top:1px; }
+.stat-card:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+}
+.stat-label  { font-size: 11px; color: #86868b; margin-bottom: 2px; white-space: nowrap; font-weight: 500; }
+.stat-value  { font-size: 13px; font-weight: 600; color: #1d1d1f;
+               white-space: nowrap; overflow: hidden; text-overflow: ellipsis; letter-spacing: -0.2px; }
+.stat-delta-up   { font-size: 12px; font-weight: 500; color: #ff3b30; margin-top:2px; }
+.stat-delta-down { font-size: 12px; font-weight: 500; color: #34c759; margin-top:2px; }
 .fut-box {
-    background: #ffffff; border: 1px solid #eee; border-radius: 8px; padding: 6px 12px;
-    display: flex; justify-content: space-between; align-items: center; height: 36px;
+    background: #ffffff; 
+    border-radius: 14px; 
+    padding: 8px 16px;
+    display: flex; justify-content: space-between; align-items: center; height: 42px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+    border: 1px solid rgba(0,0,0,0.02);
 }
-.fut-label { font-size: 11px; color: #666; font-weight: 600; }
-.fut-price { font-size: 13px; font-weight: 700; color: #1a1a1a; margin: 0 8px; }
-.fut-pct   { font-size: 12px; font-weight: 600; }
+.fut-label { font-size: 12px; color: #86868b; font-weight: 500; }
+.fut-price { font-size: 14px; font-weight: 600; color: #1d1d1f; margin: 0 10px; letter-spacing: -0.3px; }
+.fut-pct   { font-size: 13px; font-weight: 600; }
 .fx-box {
-    background: #fff5f5; border: 1px solid #ffdada; border-radius: 8px; padding: 4px 12px;
-    display: flex; justify-content: center; align-items: center; margin-top: 6px;
+    background: rgba(255, 59, 48, 0.05); 
+    border-radius: 12px; 
+    padding: 6px 14px;
+    display: flex; justify-content: center; align-items: center; margin-top: 8px;
+    border: 1px solid rgba(255, 59, 48, 0.1);
 }
-.fx-label { font-size: 11px; color: #c53030; font-weight: 700; margin-right: 12px; }
-.fx-price { font-size: 13px; font-weight: 700; color: #1a1a1a; margin-right: 8px; }
+.fx-label { font-size: 12px; color: #ff3b30; font-weight: 600; margin-right: 12px; letter-spacing: -0.2px; }
+.fx-price { font-size: 14px; font-weight: 600; color: #1d1d1f; margin-right: 8px; }
 </style>
 <div class='main-title'>📊 SPX &amp; NASDAQ</div>
 """, unsafe_allow_html=True)
