@@ -151,6 +151,32 @@ def fetch_market_data():
         return result
     except: return {}
 
+@st.cache_data(ttl=43200, show_spinner=False)
+def fetch_index_drawdown():
+    """使用 yfinance 获取大盘高点回撤数据 (缓存12小时)"""
+    try:
+        import yfinance as yf
+        data = yf.download(['^NDX', '^GSPC'], period='2y', progress=False)
+        if data.empty:
+            return {}
+        
+        highs = data['High']
+        closes = data['Close']
+        
+        result = {}
+        for ticker, name in [('^NDX', '纳指100'), ('^GSPC', '标普500')]:
+            if ticker in highs.columns and ticker in closes.columns:
+                series_h = highs[ticker].dropna()
+                series_c = closes[ticker].dropna()
+                if not series_h.empty and not series_c.empty:
+                    ath = series_h.max()
+                    current = series_c.iloc[-1]
+                    drawdown = ((current / ath) - 1) * 100
+                    result[name] = {"ath": ath, "current": current, "drawdown": drawdown}
+        return result
+    except:
+        return {}
+
 # ===============================
 # 3b. 历史折溢价率数据获取（缓存12小时）
 # ===============================
@@ -377,6 +403,7 @@ body, .stApp { font-family: 'Inter', sans-serif; }
 trading  = is_trading_time()
 data_etf = fetch_etf_data()
 data_market = fetch_market_data()
+data_drawdown = fetch_index_drawdown()
 
 if not data_etf:
     st.error("数据加载失败，请检查网络。(Tencent API Error)")
@@ -404,12 +431,47 @@ def fx_html(data):
         <span class='fut-pct' style='color:{color}'>{pm}{data['percent']:.2f}%</span>
     </div>"""
 
+def drawdown_html(name, data):
+    if not data: return ""
+    dd = float(data['drawdown'])
+    
+    # 判定状态
+    if dd <= -20:
+        state = "🩸 熊市 (超跌)"
+        bg = "#7f1d1d"; tc = "#fecaca"; border = "#ef4444"; icon = "🚨 极度恐慌"
+    elif dd <= -10:
+        state = "🔥 修正 (大跌)"
+        bg = "#fff7ed"; tc = "#c2410c"; border = "#fdba74"; icon = "💡 南向通抄底窗口"
+    elif dd <= -5:
+        state = "⚠️ 回调 (Pullback)"
+        bg = "#fefce8"; tc = "#a16207"; border = "#fef08a"; icon = "👀 观察期"
+    else:
+        state = "✅ 安全 (震荡/新高)"
+        bg = "#f0fdf4"; tc = "#15803d"; border = "#bbf7d0"; icon = "💎 定投场内"
+
+    return f"""
+    <div style='background:{bg}; border:1px solid {border}; border-radius:8px; padding:8px 12px; margin-top:8px; display:flex; flex-direction:column; justify-content:center;'>
+        <div style='display:flex; justify-content:space-between; align-items:center;'>
+            <span style='font-size:12px; font-weight:700; color:{tc};'>{name} 水位雷达</span>
+            <span style='font-size:11px; font-weight:600; color:{tc};'>{icon}</span>
+        </div>
+        <div style='margin-top:4px; display:flex; align-items:baseline;'>
+            <span style='font-size:18px; font-weight:bold; color:{tc};'>{dd:+.2f}%</span>
+            <span style='font-size:11px; color:{tc}; margin-left:6px; opacity:0.8;'>(距历史最高点)</span>
+        </div>
+        <div style='font-size:12px; font-weight:700; color:{tc}; margin-top:2px;'>状态：{state}</div>
+    </div>
+    """
+
 # --- 市场行情栏 ---
 c_f_left, c_f1, c_f2, c_f_right = st.columns([1, 4, 4, 1])
 with c_f1:
     st.markdown(fut_html("NAS100 Fut", data_market.get("纳指期货")), unsafe_allow_html=True)
+    st.markdown(drawdown_html("纳指100", data_drawdown.get("纳指100")), unsafe_allow_html=True)
 with c_f2:
     st.markdown(fut_html("SP500 Fut", data_market.get("标普期货")), unsafe_allow_html=True)
+    st.markdown(drawdown_html("标普500", data_drawdown.get("标普500")), unsafe_allow_html=True)
+
 # --- 交易状态 & 自动刷新 (中置显示预留) ---
 tz = pytz.timezone("Asia/Shanghai")
 now_obj = datetime.now(tz)
