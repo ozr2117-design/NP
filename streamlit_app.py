@@ -429,7 +429,7 @@ body, .stApp {
     background: rgba(255, 59, 48, 0.05); 
     border-radius: 12px; 
     padding: 6px 14px;
-    display: flex; justify-content: center; align-items: center; margin-top: -20px;
+    display: flex; justify-content: center; align-items: center; margin-top: 0px;
     border: 1px solid rgba(255, 59, 48, 0.1);
 }
 .fx-label { font-size: 12px; color: #ff3b30; font-weight: 600; margin-right: 12px; letter-spacing: -0.2px; }
