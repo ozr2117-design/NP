@@ -498,11 +498,7 @@ def drawdown_html(name, data, daily_pct=0.0):
 
     alert_html = ""
     if daily_pct <= -1.5:
-        alert_html = f"""
-        <div style='margin-top:8px; padding:4px 6px; background:#fee2e2; border-left:3px solid #dc2626; border-radius:4px; animation: pulse 2s infinite;'>
-            <span style='font-size:11px; font-weight:700; color:#991b1b;'>⚡ 单日暴跌 {daily_pct:.2f}%：留意极高溢价套利！</span>
-        </div>
-        """
+        alert_html = f"<div style='margin-top:8px; padding:4px 6px; background:#fee2e2; border-left:3px solid #dc2626; border-radius:4px; animation: pulse 2s infinite;'><span style='font-size:11px; font-weight:700; color:#991b1b;'>⚡ 单日暴跌 {daily_pct:.2f}%：留意极高溢价套利！</span></div>"
 
     return f"""
     <style>
