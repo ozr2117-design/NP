@@ -1,0 +1,57 @@
+name: Wake Up & Health Check (NP ETF Monitor)
+
+on:
+  schedule:
+    # 交易日定时唤醒保底 (UTC 00:45, 02:30, 06:00, 08:30, 12:30 对应北京时间 08:45, 10:30, 14:00, 16:30, 20:30)
+    - cron: '45 0 * * 1-5'
+    - cron: '30 2 * * 1-5'
+    - cron: '0 6 * * 1-5'
+    - cron: '30 8 * * 1-5'
+    - cron: '30 12 * * 1-5'
+  workflow_dispatch: # 支持由 Cloudflare Workers 秒级外部准时调度触发
+
+jobs:
+  wake-and-check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Install Dependencies
+        run: |
+          pip install requests
+
+      - name: Run Health Check & Data Fetch
+        run: |
+          echo "=== 正在唤醒并巡检场内 ETF 监控数据接口 ==="
+          python -c "
+          import requests
+          # 1. 测试腾讯财经 ETF 行情接口
+          symbols = 'sh513100,sz159941,sh513500'
+          r1 = requests.get(f'http://qt.gtimg.cn/q={symbols}', timeout=10)
+          print(f'Tencent ETF API status: {r1.status_code}, data length: {len(r1.content)}')
+
+          # 2. 测试新浪期货行情接口
+          r2 = requests.get('http://hq.sinajs.cn/list=hf_NQ,hf_ES,fx_susdcnh', headers={'Referer': 'https://finance.sina.com.cn/'}, timeout=10)
+          print(f'Sina Futures API status: {r2.status_code}, data length: {len(r2.content)}')
+
+          # 3. 测试腾讯大盘水位接口
+          r3 = requests.get('http://qt.gtimg.cn/q=usNDX,usINX', timeout=10)
+          print(f'Tencent Drawdown API status: {r3.status_code}, data length: {len(r3.content)}')
+
+          assert r1.status_code == 200 and r2.status_code == 200 and r3.status_code == 200, 'Data source check failed!'
+          print('✅ 所有场内 ETF 与美股雷达数据源正常可用！')
+          "
+
+      - name: Ping Streamlit Apps to Prevent Sleep
+        run: |
+          echo "Pinging Streamlit Cloud apps to prevent sleep..."
+          for url in "https://np.streamlit.app" "https://ozr2117-design-np.streamlit.app"; do
+            STATUS=$(curl -sL -o /dev/null -w "%{http_code}" "$url" || true)
+            echo "Ping $url -> HTTP $STATUS"
+          done
