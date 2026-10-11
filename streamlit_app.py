@@ -442,6 +442,119 @@ body, .stApp {
 }
 .fx-label { font-size: 12px; color: #ff3b30; font-weight: 600; margin-right: 12px; letter-spacing: -0.2px; }
 .fx-price { font-size: 14px; font-weight: 600; color: #1d1d1f; margin-right: 8px; }
+
+/* 移动端卡片流样式 */
+.m-card-group-title {
+    margin: 16px 0 10px 0;
+    font-size: 13px;
+    font-weight: 700;
+    color: #1d1d1f;
+    display: flex;
+    align-items: center;
+}
+.m-etf-card {
+    background: #ffffff;
+    border-radius: 14px;
+    padding: 12px 14px;
+    margin-bottom: 10px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+    border: 1px solid rgba(0,0,0,0.06);
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+.m-etf-card:active {
+    transform: scale(0.99);
+}
+.m-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+}
+.m-etf-name {
+    font-size: 15px;
+    font-weight: 700;
+    color: #1d1d1f;
+    letter-spacing: -0.2px;
+}
+.m-code {
+    font-size: 12px;
+    color: #86868b;
+    font-weight: 500;
+    margin-top: 1px;
+}
+.m-advise-badge {
+    font-size: 12px;
+    font-weight: 700;
+    padding: 4px 10px;
+    border-radius: 8px;
+    white-space: nowrap;
+}
+.m-card-body {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+    gap: 12px;
+}
+.m-prem-box {
+    flex: 1.2;
+    padding: 7px 10px;
+    border-radius: 8px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+}
+.m-prem-lbl {
+    font-size: 11px;
+    font-weight: 600;
+    margin-bottom: 2px;
+}
+.m-prem-val {
+    font-size: 18px;
+    font-weight: 800;
+    letter-spacing: -0.3px;
+}
+.m-price-box {
+    flex: 0.8;
+    text-align: right;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+}
+.m-price-val {
+    font-size: 17px;
+    font-weight: 700;
+    color: #1d1d1f;
+    letter-spacing: -0.3px;
+}
+.m-price-pct {
+    font-size: 12px;
+    font-weight: 600;
+    margin-top: 2px;
+}
+.m-card-footer {
+    display: flex;
+    justify-content: space-between;
+    background: #f8fafc;
+    border-radius: 8px;
+    padding: 6px 12px;
+    border: 1px solid rgba(0,0,0,0.02);
+}
+.m-foot-col {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+.m-foot-lbl {
+    font-size: 10px;
+    color: #86868b;
+    margin-bottom: 1px;
+}
+.m-foot-val {
+    font-size: 12px;
+    font-weight: 600;
+    color: #374151;
+}
 </style>
 <div class='main-title'>📊 SPX &amp; NASDAQ</div>
 """, unsafe_allow_html=True)
@@ -640,8 +753,102 @@ if not nd_valid.empty:
 st.divider()
 
 # ===============================
-# 9. 数据表
+# 9. 数据展示 (移动端卡片自适应 / 桌面端完整大表)
 # ===============================
+def render_mobile_cards_html(df_data):
+    cards_html = ["<div class='mobile-cards-view'>"]
+    current_cat = None
+    for _, row in df_data.iterrows():
+        cat = row["分类"]
+        if cat != current_cat:
+            current_cat = cat
+            badge_cls = "badge-sp" if cat == "标普" else "badge-nd"
+            cards_html.append(f"""
+            <div class='m-card-group-title'>
+                <span class='{badge_cls}'>{cat} 系列标的</span>
+            </div>
+            """)
+
+        code = str(row["代码"])
+        name = str(row["名称"])
+        curr_price = float(row["最新价"])
+        est_val = float(row["估值(EST)"])
+        pct = float(row["涨跌幅(%)"])
+        est_prem = float(row["实时溢价(EST)"])
+        advise = str(row["最优渠道"])
+        ref_prem = float(row["券商参考溢价"])
+        nav = float(row["资产净值"])
+
+        # 溢价高亮与标签
+        if est_prem < 0:
+            prem_bg = "#fee2e2"
+            prem_tc = "#dc2626"
+            prem_desc = "折价洼地"
+        elif est_prem < 2.0:
+            prem_bg = "#fef3c7"
+            prem_tc = "#b45309"
+            prem_desc = "低溢价"
+        else:
+            prem_bg = "#ecfdf5"
+            prem_tc = "#059669"
+            prem_desc = "正常溢价"
+
+        # 涨跌幅颜色 (国内A股习惯：红涨绿跌)
+        pct_tc = "#dc2626" if pct > 0 else ("#16a34a" if pct < 0 else "#6b7280")
+        pct_sign = "+" if pct > 0 else ""
+
+        # 渠道建议徽章
+        if "场内" in advise:
+            advise_bg = "#e8f0fe"
+            advise_tc = "#1a56db"
+            advise_border = "#bfdbfe"
+        else:
+            advise_bg = "#ffeedd"
+            advise_tc = "#d97706"
+            advise_border = "#fed7aa"
+
+        card_html = f"""
+        <div class='m-etf-card'>
+            <div class='m-card-header'>
+                <div>
+                    <div class='m-etf-name'>{name}</div>
+                    <div class='m-code'>{code}</div>
+                </div>
+                <div class='m-advise-badge' style='background:{advise_bg}; color:{advise_tc}; border:1px solid {advise_border};'>
+                    {advise}
+                </div>
+            </div>
+            <div class='m-card-body'>
+                <div class='m-prem-box' style='background:{prem_bg};'>
+                    <div class='m-prem-lbl' style='color:{prem_tc};'>实时溢价(EST) · {prem_desc}</div>
+                    <div class='m-prem-val' style='color:{prem_tc};'>{est_prem:+.2f}%</div>
+                </div>
+                <div class='m-price-box'>
+                    <div class='m-price-val'>{curr_price:.3f}</div>
+                    <div class='m-price-pct' style='color:{pct_tc};'>{pct_sign}{pct:.2f}%</div>
+                </div>
+            </div>
+            <div class='m-card-footer'>
+                <div class='m-foot-col'>
+                    <span class='m-foot-lbl'>预估估值</span>
+                    <span class='m-foot-val'>{est_val:.3f}</span>
+                </div>
+                <div class='m-foot-col'>
+                    <span class='m-foot-lbl'>券商参考</span>
+                    <span class='m-foot-val'>{ref_prem:+.2f}%</span>
+                </div>
+                <div class='m-foot-col'>
+                    <span class='m-foot-lbl'>资产规模</span>
+                    <span class='m-foot-val'>{nav:.2f}亿</span>
+                </div>
+            </div>
+        </div>
+        """
+        cards_html.append(card_html)
+
+    cards_html.append("</div>")
+    return "\n".join(cards_html)
+
 def color_premium(val):
     try:
         v = float(val)
@@ -680,7 +887,41 @@ styled = df[display_cols].style \
         "资产净值":       "{:.2f} 亿",
     })
 
-st.dataframe(styled, use_container_width=True, hide_index=True)
+# 表头与视图切换
+col_head1, col_head2 = st.columns([3, 2])
+with col_head1:
+    st.markdown("<div style='font-size:16px; font-weight:700; color:#1d1d1f; margin-top:2px;'>📋 标的实时监控</div>", unsafe_allow_html=True)
+with col_head2:
+    view_mode = st.radio(
+        "视图模式",
+        ["⚡ 自动", "📱 卡片", "🖥️ 表格"],
+        index=0,
+        horizontal=True,
+        label_visibility="collapsed"
+    )
+
+if view_mode == "⚡ 自动":
+    st.markdown("""
+    <style>
+    @media (min-width: 769px) {
+        .mobile-cards-view { display: none !important; }
+    }
+    @media (max-width: 768px) {
+        div[data-testid="stElementContainer"]:has(div[data-testid="stDataFrame"]) { display: none !important; }
+        div[data-testid="stDataFrame"] { display: none !important; }
+        .mobile-cards-view { display: block !important; }
+    }
+    </style>
+    """, unsafe_allow_html=True)
+    st.markdown(render_mobile_cards_html(df), unsafe_allow_html=True)
+    st.dataframe(styled, use_container_width=True, hide_index=True)
+
+elif view_mode == "📱 卡片":
+    st.markdown(render_mobile_cards_html(df), unsafe_allow_html=True)
+
+elif view_mode == "🖥️ 表格":
+    st.dataframe(styled, use_container_width=True, hide_index=True)
+
 
 # ===============================
 # 9b. 历史折溢价走势图（懒加载）
