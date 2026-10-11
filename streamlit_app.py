@@ -763,11 +763,11 @@ def render_mobile_cards_html(df_data):
         if cat != current_cat:
             current_cat = cat
             badge_cls = "badge-sp" if cat == "标普" else "badge-nd"
-            cards_html.append(f"""
-            <div class='m-card-group-title'>
-                <span class='{badge_cls}'>{cat} 系列标的</span>
-            </div>
-            """)
+            cards_html.append(
+                f"<div class='m-card-group-title'>"
+                f"<span class='{badge_cls}'>{cat} 系列标的</span>"
+                f"</div>"
+            )
 
         code = str(row["代码"])
         name = str(row["名称"])
@@ -807,47 +807,47 @@ def render_mobile_cards_html(df_data):
             advise_tc = "#d97706"
             advise_border = "#fed7aa"
 
-        card_html = f"""
-        <div class='m-etf-card'>
-            <div class='m-card-header'>
-                <div>
-                    <div class='m-etf-name'>{name}</div>
-                    <div class='m-code'>{code}</div>
-                </div>
-                <div class='m-advise-badge' style='background:{advise_bg}; color:{advise_tc}; border:1px solid {advise_border};'>
-                    {advise}
-                </div>
-            </div>
-            <div class='m-card-body'>
-                <div class='m-prem-box' style='background:{prem_bg};'>
-                    <div class='m-prem-lbl' style='color:{prem_tc};'>实时溢价(EST) · {prem_desc}</div>
-                    <div class='m-prem-val' style='color:{prem_tc};'>{est_prem:+.2f}%</div>
-                </div>
-                <div class='m-price-box'>
-                    <div class='m-price-val'>{curr_price:.3f}</div>
-                    <div class='m-price-pct' style='color:{pct_tc};'>{pct_sign}{pct:.2f}%</div>
-                </div>
-            </div>
-            <div class='m-card-footer'>
-                <div class='m-foot-col'>
-                    <span class='m-foot-lbl'>预估估值</span>
-                    <span class='m-foot-val'>{est_val:.3f}</span>
-                </div>
-                <div class='m-foot-col'>
-                    <span class='m-foot-lbl'>券商参考</span>
-                    <span class='m-foot-val'>{ref_prem:+.2f}%</span>
-                </div>
-                <div class='m-foot-col'>
-                    <span class='m-foot-lbl'>资产规模</span>
-                    <span class='m-foot-val'>{nav:.2f}亿</span>
-                </div>
-            </div>
-        </div>
-        """
+        card_html = (
+            f"<div class='m-etf-card'>"
+            f"<div class='m-card-header'>"
+            f"<div>"
+            f"<div class='m-etf-name'>{name}</div>"
+            f"<div class='m-code'>{code}</div>"
+            f"</div>"
+            f"<div class='m-advise-badge' style='background:{advise_bg}; color:{advise_tc}; border:1px solid {advise_border};'>"
+            f"{advise}"
+            f"</div>"
+            f"</div>"
+            f"<div class='m-card-body'>"
+            f"<div class='m-prem-box' style='background:{prem_bg};'>"
+            f"<div class='m-prem-lbl' style='color:{prem_tc};'>实时溢价(EST) · {prem_desc}</div>"
+            f"<div class='m-prem-val' style='color:{prem_tc};'>{est_prem:+.2f}%</div>"
+            f"</div>"
+            f"<div class='m-price-box'>"
+            f"<div class='m-price-val'>{curr_price:.3f}</div>"
+            f"<div class='m-price-pct' style='color:{pct_tc};'>{pct_sign}{pct:.2f}%</div>"
+            f"</div>"
+            f"</div>"
+            f"<div class='m-card-footer'>"
+            f"<div class='m-foot-col'>"
+            f"<span class='m-foot-lbl'>预估估值</span>"
+            f"<span class='m-foot-val'>{est_val:.3f}</span>"
+            f"</div>"
+            f"<div class='m-foot-col'>"
+            f"<span class='m-foot-lbl'>券商参考</span>"
+            f"<span class='m-foot-val'>{ref_prem:+.2f}%</span>"
+            f"</div>"
+            f"<div class='m-foot-col'>"
+            f"<span class='m-foot-lbl'>资产规模</span>"
+            f"<span class='m-foot-val'>{nav:.2f}亿</span>"
+            f"</div>"
+            f"</div>"
+            f"</div>"
+        )
         cards_html.append(card_html)
 
     cards_html.append("</div>")
-    return "\n".join(cards_html)
+    return "".join(cards_html)
 
 def color_premium(val):
     try:
@@ -901,7 +901,7 @@ with col_head2:
     )
 
 if view_mode == "⚡ 自动":
-    st.markdown("""
+    st.html("""
     <style>
     @media (min-width: 769px) {
         .mobile-cards-view { display: none !important; }
@@ -912,15 +912,16 @@ if view_mode == "⚡ 自动":
         .mobile-cards-view { display: block !important; }
     }
     </style>
-    """, unsafe_allow_html=True)
-    st.markdown(render_mobile_cards_html(df), unsafe_allow_html=True)
+    """)
+    st.html(render_mobile_cards_html(df))
     st.dataframe(styled, use_container_width=True, hide_index=True)
 
 elif view_mode == "📱 卡片":
-    st.markdown(render_mobile_cards_html(df), unsafe_allow_html=True)
+    st.html(render_mobile_cards_html(df))
 
 elif view_mode == "🖥️ 表格":
     st.dataframe(styled, use_container_width=True, hide_index=True)
+
 
 
 # ===============================
