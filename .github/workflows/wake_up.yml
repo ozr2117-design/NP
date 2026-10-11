@@ -2,7 +2,9 @@ name: Wake Up & Health Check (NP ETF Monitor)
 
 on:
   schedule:
-    # 交易日定时唤醒保底 (UTC 00:45, 02:30, 06:00, 08:30, 12:30 对应北京时间 08:45, 10:30, 14:00, 16:30, 20:30)
+    # 每天保活心跳 (UTC 03:00, 11:00 对应北京时间 11:00, 19:00，覆盖周六周日全天防休眠)
+    - cron: '0 3,11 * * *'
+    # 交易日关键窗口定时唤醒
     - cron: '45 0 * * 1-5'
     - cron: '30 2 * * 1-5'
     - cron: '0 6 * * 1-5'
@@ -51,7 +53,7 @@ jobs:
       - name: Ping Streamlit Apps to Prevent Sleep
         run: |
           echo "Pinging Streamlit Cloud apps to prevent sleep..."
-          for url in "https://np.streamlit.app" "https://ozr2117-design-np.streamlit.app"; do
-            STATUS=$(curl -sL -o /dev/null -w "%{http_code}" "$url" || true)
+          for url in "https://rqehmildgsfhedt39krz7a.streamlit.app/" "https://qdii-quota-monitor.streamlit.app/"; do
+            STATUS=$(curl -sL -o /dev/null -w "%{http_code}" -H "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) KeepAlive/1.0" "$url" || true)
             echo "Ping $url -> HTTP $STATUS"
           done
