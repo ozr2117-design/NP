@@ -50,10 +50,10 @@ breakeven_prem_pct = breakeven_prem_rate * 100
 
 st.sidebar.markdown("---")
 st.sidebar.markdown(f"""
-<div style='background:#fef3cd; padding:10px; border-radius:8px;'>
-    <div style='font-size:13px; color:#856404; margin-bottom:5px;'>💡 临界买入溢价率 (南向通等效溢价)</div>
-    <div style='font-size:24px; font-weight:bold; color:#d97706;'>{breakeven_prem_pct:.2f}%</div>
-    <div style='font-size:12px; color:#856404; margin-top:5px;'>
+<div class='sidebar-breakeven-box'>
+    <div class='sidebar-breakeven-title'>💡 临界买入溢价率 (南向通等效溢价)</div>
+    <div class='sidebar-breakeven-val'>{breakeven_prem_pct:.2f}%</div>
+    <div class='sidebar-breakeven-desc'>
         若场内溢价 <b>≤ {breakeven_prem_pct:.2f}%</b>，买场内ETF<br>
         若场内溢价 <b>> {breakeven_prem_pct:.2f}%</b>，买南向通基金
     </div>
@@ -315,7 +315,7 @@ def plot_premium_chart(df: pd.DataFrame, etf_name: str, etf_code: str):
             x=0.5, xanchor='center', font=dict(size=16)
         ),
         xaxis=dict(
-            title="交易日期", showgrid=True, gridcolor='rgba(0,0,0,0.05)', tickformat='%Y-%m-%d',
+            title="交易日期", showgrid=True, gridcolor='rgba(128,128,128,0.15)', tickformat='%Y-%m-%d',
             rangeselector=dict(
                 buttons=list([
                     dict(count=1, label="1年", step="year", stepmode="backward"),
@@ -328,7 +328,7 @@ def plot_premium_chart(df: pd.DataFrame, etf_name: str, etf_code: str):
             rangeslider=dict(visible=True, thickness=0.05),
             type="date"
         ),
-        yaxis=dict(title="折溢价率 (%)", showgrid=True, gridcolor='rgba(0,0,0,0.05)'),
+        yaxis=dict(title="折溢价率 (%)", showgrid=True, gridcolor='rgba(128,128,128,0.15)'),
         hovermode="x unified",
         plot_bgcolor='rgba(0,0,0,0)',
         paper_bgcolor='rgba(0,0,0,0)',
@@ -393,72 +393,323 @@ def build_df(data_etf, data_market, breakeven_prem_pct):
 # ===============================
 st.markdown("""
 <style>
+/* ==================== 浅色与深色模式自适应变量 ==================== */
+:root {
+    --bg-app: #fbfbfd;
+    --bg-card: #ffffff;
+    --bg-card-hover: #ffffff;
+    --bg-subtle: #f8fafc;
+    --text-primary: #1d1d1f;
+    --text-secondary: #86868b;
+    --border-color: rgba(0, 0, 0, 0.06);
+    --border-subtle: rgba(0, 0, 0, 0.03);
+    --shadow-card: 0 2px 8px rgba(0, 0, 0, 0.04);
+    --shadow-card-hover: 0 4px 12px rgba(0, 0, 0, 0.08);
+
+    /* 徽章 */
+    --badge-sp-bg: #f0f4ff;
+    --badge-sp-tc: #0066cc;
+    --badge-nd-bg: #fff7e6;
+    --badge-nd-tc: #d97706;
+
+    /* 汇率盒子 */
+    --fx-bg: rgba(255, 59, 48, 0.05);
+    --fx-bd: rgba(255, 59, 48, 0.12);
+
+    /* 侧边栏均衡临界盒子 */
+    --breakeven-bg: #fef3cd;
+    --breakeven-bd: #fde68a;
+    --breakeven-tc: #856404;
+    --breakeven-num: #d97706;
+
+    /* 水位雷达状态 */
+    --radar-safe-bg: #f0fdf4;
+    --radar-safe-tc: #15803d;
+    --radar-safe-bd: #bbf7d0;
+
+    --radar-pullback-bg: #fefce8;
+    --radar-pullback-tc: #a16207;
+    --radar-pullback-bd: #fef08a;
+
+    --radar-correction-bg: #fff7ed;
+    --radar-correction-tc: #c2410c;
+    --radar-correction-bd: #fdba74;
+
+    --radar-bear-bg: #7f1d1d;
+    --radar-bear-tc: #fecaca;
+    --radar-bear-bd: #ef4444;
+
+    /* 涨跌幅 */
+    --pct-up: #dc2626;
+    --pct-down: #16a34a;
+    --pct-flat: #86868b;
+
+    /* 移动端卡片溢价与建议 */
+    --prem-discount-bg: #fee2e2;
+    --prem-discount-tc: #dc2626;
+    --prem-low-bg: #fef3c7;
+    --prem-low-tc: #b45309;
+    --prem-normal-bg: #ecfdf5;
+    --prem-normal-tc: #059669;
+
+    --advise-market-bg: #e8f0fe;
+    --advise-market-tc: #1a56db;
+    --advise-market-bd: #bfdbfe;
+
+    --advise-south-bg: #ffeedd;
+    --advise-south-tc: #d97706;
+    --advise-south-bd: #fed7aa;
+}
+
+@media (prefers-color-scheme: dark) {
+    :root {
+        --bg-app: #0e1117;
+        --bg-card: #161b22;
+        --bg-card-hover: #1c2128;
+        --bg-subtle: #21262d;
+        --text-primary: #f0f6fc;
+        --text-secondary: #8b949e;
+        --border-color: rgba(255, 255, 255, 0.1);
+        --border-subtle: rgba(255, 255, 255, 0.05);
+        --shadow-card: 0 2px 8px rgba(0, 0, 0, 0.35);
+        --shadow-card-hover: 0 4px 14px rgba(0, 0, 0, 0.5);
+
+        --badge-sp-bg: rgba(56, 139, 253, 0.18);
+        --badge-sp-tc: #58a6ff;
+        --badge-nd-bg: rgba(210, 153, 34, 0.18);
+        --badge-nd-tc: #f0883e;
+
+        --fx-bg: rgba(255, 59, 48, 0.12);
+        --fx-bd: rgba(255, 59, 48, 0.25);
+
+        --breakeven-bg: rgba(210, 153, 34, 0.15);
+        --breakeven-bd: rgba(210, 153, 34, 0.35);
+        --breakeven-tc: #d29922;
+        --breakeven-num: #f0883e;
+
+        --radar-safe-bg: rgba(46, 160, 67, 0.15);
+        --radar-safe-tc: #3fb950;
+        --radar-safe-bd: rgba(46, 160, 67, 0.3);
+
+        --radar-pullback-bg: rgba(210, 153, 34, 0.15);
+        --radar-pullback-tc: #d29922;
+        --radar-pullback-bd: rgba(210, 153, 34, 0.3);
+
+        --radar-correction-bg: rgba(219, 109, 40, 0.15);
+        --radar-correction-tc: #f0883e;
+        --radar-correction-bd: rgba(219, 109, 40, 0.3);
+
+        --radar-bear-bg: rgba(248, 81, 73, 0.2);
+        --radar-bear-tc: #ff7b72;
+        --radar-bear-bd: rgba(248, 81, 73, 0.4);
+
+        --pct-up: #ff7b72;
+        --pct-down: #3fb950;
+        --pct-flat: #8b949e;
+
+        --prem-discount-bg: rgba(248, 81, 73, 0.2);
+        --prem-discount-tc: #ff7b72;
+        --prem-low-bg: rgba(210, 153, 34, 0.2);
+        --prem-low-tc: #f0883e;
+        --prem-normal-bg: rgba(46, 160, 67, 0.2);
+        --prem-normal-tc: #3fb950;
+
+        --advise-market-bg: rgba(56, 139, 253, 0.18);
+        --advise-market-tc: #58a6ff;
+        --advise-market-bd: rgba(56, 139, 253, 0.35);
+
+        --advise-south-bg: rgba(210, 153, 34, 0.18);
+        --advise-south-tc: #f0883e;
+        --advise-south-bd: rgba(210, 153, 34, 0.35);
+    }
+
+    [data-testid="stSidebar"] {
+        background-color: #161b22 !important;
+        border-right: 1px solid rgba(255, 255, 255, 0.08) !important;
+    }
+}
+
+[data-theme="dark"], [data-base-theme="dark"] {
+    --bg-app: #0e1117;
+    --bg-card: #161b22;
+    --bg-card-hover: #1c2128;
+    --bg-subtle: #21262d;
+    --text-primary: #f0f6fc;
+    --text-secondary: #8b949e;
+    --border-color: rgba(255, 255, 255, 0.1);
+    --border-subtle: rgba(255, 255, 255, 0.05);
+    --shadow-card: 0 2px 8px rgba(0, 0, 0, 0.35);
+    --shadow-card-hover: 0 4px 14px rgba(0, 0, 0, 0.5);
+
+    --badge-sp-bg: rgba(56, 139, 253, 0.18);
+    --badge-sp-tc: #58a6ff;
+    --badge-nd-bg: rgba(210, 153, 34, 0.18);
+    --badge-nd-tc: #f0883e;
+
+    --fx-bg: rgba(255, 59, 48, 0.12);
+    --fx-bd: rgba(255, 59, 48, 0.25);
+
+    --breakeven-bg: rgba(210, 153, 34, 0.15);
+    --breakeven-bd: rgba(210, 153, 34, 0.35);
+    --breakeven-tc: #d29922;
+    --breakeven-num: #f0883e;
+
+    --radar-safe-bg: rgba(46, 160, 67, 0.15);
+    --radar-safe-tc: #3fb950;
+    --radar-safe-bd: rgba(46, 160, 67, 0.3);
+
+    --radar-pullback-bg: rgba(210, 153, 34, 0.15);
+    --radar-pullback-tc: #d29922;
+    --radar-pullback-bd: rgba(210, 153, 34, 0.3);
+
+    --radar-correction-bg: rgba(219, 109, 40, 0.15);
+    --radar-correction-tc: #f0883e;
+    --radar-correction-bd: rgba(219, 109, 40, 0.3);
+
+    --radar-bear-bg: rgba(248, 81, 73, 0.2);
+    --radar-bear-tc: #ff7b72;
+    --radar-bear-bd: rgba(248, 81, 73, 0.4);
+
+    --pct-up: #ff7b72;
+    --pct-down: #3fb950;
+    --pct-flat: #8b949e;
+
+    --prem-discount-bg: rgba(248, 81, 73, 0.2);
+    --prem-discount-tc: #ff7b72;
+    --prem-low-bg: rgba(210, 153, 34, 0.2);
+    --prem-low-tc: #f0883e;
+    --prem-normal-bg: rgba(46, 160, 67, 0.2);
+    --prem-normal-tc: #3fb950;
+
+    --advise-market-bg: rgba(56, 139, 253, 0.18);
+    --advise-market-tc: #58a6ff;
+    --advise-market-bd: rgba(56, 139, 253, 0.35);
+
+    --advise-south-bg: rgba(210, 153, 34, 0.18);
+    --advise-south-tc: #f0883e;
+    --advise-south-bd: rgba(210, 153, 34, 0.35);
+}
+
+/* ==================== 页面核心组件样式 ==================== */
 body, .stApp { 
     font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-    background-color: #fbfbfd;
+    background-color: var(--bg-app);
+    color: var(--text-primary);
 }
-.main-title  { font-size:24px; font-weight:700; letter-spacing:-0.5px; text-align:center; margin-bottom:4px; color:#1d1d1f; }
-.subtitle    { font-size:12px; text-align:center; color:#86868b; margin-bottom:14px; }
-.section-hdr { font-size:14px; font-weight:600; color:#1d1d1f; margin:12px 0 8px 0; letter-spacing:-0.3px; }
+.main-title  { font-size:24px; font-weight:700; letter-spacing:-0.5px; text-align:center; margin-bottom:4px; color:var(--text-primary); }
+.subtitle    { font-size:12px; text-align:center; color:var(--text-secondary); margin-bottom:14px; }
+.section-hdr { font-size:14px; font-weight:600; color:var(--text-primary); margin:12px 0 8px 0; letter-spacing:-0.3px; }
 .badge-sp { display:inline-block; padding:3px 10px; border-radius:12px;
-            background:#f0f4ff; color:#0066cc; font-size:11px; font-weight:600; }
+            background:var(--badge-sp-bg); color:var(--badge-sp-tc); font-size:11px; font-weight:600; }
 .badge-nd { display:inline-block; padding:3px 10px; border-radius:12px;
-            background:#fff7e6; color:#d97706; font-size:11px; font-weight:600; }
+            background:var(--badge-nd-bg); color:var(--badge-nd-tc); font-size:11px; font-weight:600; }
+
+.sidebar-breakeven-box {
+    background: var(--breakeven-bg);
+    border: 1px solid var(--breakeven-bd);
+    padding: 10px;
+    border-radius: 8px;
+}
+.sidebar-breakeven-title { font-size: 13px; color: var(--breakeven-tc); margin-bottom: 5px; font-weight: 600; }
+.sidebar-breakeven-val { font-size: 24px; font-weight: bold; color: var(--breakeven-num); }
+.sidebar-breakeven-desc { font-size: 12px; color: var(--breakeven-tc); margin-top: 5px; }
+
 .stat-card {
-    background: #ffffff; 
+    background: var(--bg-card); 
     border-radius: 14px; 
     padding: 10px 14px; 
     min-width: 0;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.04);
-    border: 1px solid rgba(0,0,0,0.02);
-    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    box-shadow: var(--shadow-card);
+    border: 1px solid var(--border-color);
+    transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
 }
 .stat-card:hover {
     transform: translateY(-1px);
-    box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+    box-shadow: var(--shadow-card-hover);
+    background: var(--bg-card-hover);
 }
-.stat-label  { font-size: 11px; color: #86868b; margin-bottom: 2px; white-space: nowrap; font-weight: 500; }
-.stat-value  { font-size: 13px; font-weight: 600; color: #1d1d1f;
+.stat-label  { font-size: 11px; color: var(--text-secondary); margin-bottom: 2px; white-space: nowrap; font-weight: 500; }
+.stat-value  { font-size: 13px; font-weight: 600; color: var(--text-primary);
                white-space: nowrap; overflow: hidden; text-overflow: ellipsis; letter-spacing: -0.2px; }
-.stat-delta-up   { font-size: 12px; font-weight: 500; color: #ff3b30; margin-top:2px; }
-.stat-delta-down { font-size: 12px; font-weight: 500; color: #34c759; margin-top:2px; }
+.stat-delta-up   { font-size: 12px; font-weight: 500; color: var(--pct-up); margin-top:2px; }
+.stat-delta-down { font-size: 12px; font-weight: 500; color: var(--pct-down); margin-top:2px; }
+.pct-up   { color: var(--pct-up) !important; font-weight: 600; }
+.pct-down { color: var(--pct-down) !important; font-weight: 600; }
+.pct-flat { color: var(--pct-flat) !important; font-weight: 600; }
+
 .fut-box {
-    background: #ffffff; 
+    background: var(--bg-card); 
     border-radius: 14px; 
     padding: 8px 16px;
     display: flex; justify-content: space-between; align-items: center; height: 42px;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.04);
-    border: 1px solid rgba(0,0,0,0.02);
+    box-shadow: var(--shadow-card);
+    border: 1px solid var(--border-color);
 }
-.fut-label { font-size: 12px; color: #86868b; font-weight: 500; }
-.fut-price { font-size: 14px; font-weight: 600; color: #1d1d1f; margin: 0 10px; letter-spacing: -0.3px; }
+.fut-label { font-size: 12px; color: var(--text-secondary); font-weight: 500; }
+.fut-price { font-size: 14px; font-weight: 600; color: var(--text-primary); margin: 0 10px; letter-spacing: -0.3px; }
 .fut-pct   { font-size: 13px; font-weight: 600; }
+
 .fx-box {
-    background: rgba(255, 59, 48, 0.05); 
+    background: var(--fx-bg); 
     border-radius: 12px; 
     padding: 6px 14px;
     display: flex; justify-content: center; align-items: center; margin-top: 0px;
-    border: 1px solid rgba(255, 59, 48, 0.1);
+    border: 1px solid var(--fx-bd);
 }
 .fx-label { font-size: 12px; color: #ff3b30; font-weight: 600; margin-right: 12px; letter-spacing: -0.2px; }
-.fx-price { font-size: 14px; font-weight: 600; color: #1d1d1f; margin-right: 8px; }
+.fx-price { font-size: 14px; font-weight: 600; color: var(--text-primary); margin-right: 8px; }
+
+/* 水位雷达样式 */
+.radar-box {
+    border-radius: 8px;
+    padding: 8px 12px;
+    margin-top: 8px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+}
+.radar-safe { background: var(--radar-safe-bg); border: 1px solid var(--radar-safe-bd); color: var(--radar-safe-tc); }
+.radar-safe .radar-title, .radar-safe .radar-icon, .radar-safe .radar-num, .radar-safe .radar-state { color: var(--radar-safe-tc); }
+
+.radar-pullback { background: var(--radar-pullback-bg); border: 1px solid var(--radar-pullback-bd); color: var(--radar-pullback-tc); }
+.radar-pullback .radar-title, .radar-pullback .radar-icon, .radar-pullback .radar-num, .radar-pullback .radar-state { color: var(--radar-pullback-tc); }
+
+.radar-correction { background: var(--radar-correction-bg); border: 1px solid var(--radar-correction-bd); color: var(--radar-correction-tc); }
+.radar-correction .radar-title, .radar-correction .radar-icon, .radar-correction .radar-num, .radar-correction .radar-state { color: var(--radar-correction-tc); }
+
+.radar-bear { background: var(--radar-bear-bg); border: 1px solid var(--radar-bear-bd); color: var(--radar-bear-tc); }
+.radar-bear .radar-title, .radar-bear .radar-icon, .radar-bear .radar-num, .radar-bear .radar-state { color: var(--radar-bear-tc); }
+
+.radar-title { font-size: 12px; font-weight: 700; }
+.radar-icon { font-size: 11px; font-weight: 600; }
+.radar-num { font-size: 18px; font-weight: bold; }
+.radar-sub { font-size: 11px; margin-left: 6px; opacity: 0.8; }
+.radar-state { font-size: 12px; font-weight: 700; margin-top: 2px; }
+.radar-alert {
+    margin-top: 8px;
+    padding: 4px 6px;
+    background: rgba(220, 38, 38, 0.15);
+    border-left: 3px solid #dc2626;
+    border-radius: 4px;
+    color: var(--pct-up);
+}
 
 /* 移动端卡片流样式 */
 .m-card-group-title {
     margin: 16px 0 10px 0;
     font-size: 13px;
     font-weight: 700;
-    color: #1d1d1f;
+    color: var(--text-primary);
     display: flex;
     align-items: center;
 }
 .m-etf-card {
-    background: #ffffff;
+    background: var(--bg-card);
     border-radius: 14px;
     padding: 12px 14px;
     margin-bottom: 10px;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.04);
-    border: 1px solid rgba(0,0,0,0.06);
+    box-shadow: var(--shadow-card);
+    border: 1px solid var(--border-color);
     transition: transform 0.15s ease, box-shadow 0.15s ease;
 }
 .m-etf-card:active {
@@ -473,12 +724,12 @@ body, .stApp {
 .m-etf-name {
     font-size: 15px;
     font-weight: 700;
-    color: #1d1d1f;
+    color: var(--text-primary);
     letter-spacing: -0.2px;
 }
 .m-code {
     font-size: 12px;
-    color: #86868b;
+    color: var(--text-secondary);
     font-weight: 500;
     margin-top: 1px;
 }
@@ -489,6 +740,17 @@ body, .stApp {
     border-radius: 8px;
     white-space: nowrap;
 }
+.m-advise-market {
+    background: var(--advise-market-bg);
+    color: var(--advise-market-tc);
+    border: 1px solid var(--advise-market-bd);
+}
+.m-advise-south {
+    background: var(--advise-south-bg);
+    color: var(--advise-south-tc);
+    border: 1px solid var(--advise-south-bd);
+}
+
 .m-card-body {
     display: flex;
     justify-content: space-between;
@@ -504,6 +766,15 @@ body, .stApp {
     flex-direction: column;
     justify-content: center;
 }
+.m-prem-discount { background: var(--prem-discount-bg); }
+.m-prem-discount .m-prem-lbl, .m-prem-discount .m-prem-val { color: var(--prem-discount-tc); }
+
+.m-prem-low { background: var(--prem-low-bg); }
+.m-prem-low .m-prem-lbl, .m-prem-low .m-prem-val { color: var(--prem-low-tc); }
+
+.m-prem-normal { background: var(--prem-normal-bg); }
+.m-prem-normal .m-prem-lbl, .m-prem-normal .m-prem-val { color: var(--prem-normal-tc); }
+
 .m-prem-lbl {
     font-size: 11px;
     font-weight: 600;
@@ -524,7 +795,7 @@ body, .stApp {
 .m-price-val {
     font-size: 17px;
     font-weight: 700;
-    color: #1d1d1f;
+    color: var(--text-primary);
     letter-spacing: -0.3px;
 }
 .m-price-pct {
@@ -535,10 +806,10 @@ body, .stApp {
 .m-card-footer {
     display: flex;
     justify-content: space-between;
-    background: #f8fafc;
+    background: var(--bg-subtle);
     border-radius: 8px;
     padding: 6px 12px;
-    border: 1px solid rgba(0,0,0,0.02);
+    border: 1px solid var(--border-subtle);
 }
 .m-foot-col {
     display: flex;
@@ -547,13 +818,13 @@ body, .stApp {
 }
 .m-foot-lbl {
     font-size: 10px;
-    color: #86868b;
+    color: var(--text-secondary);
     margin-bottom: 1px;
 }
 .m-foot-val {
     font-size: 12px;
     font-weight: 600;
-    color: #374151;
+    color: var(--text-primary);
 }
 </style>
 <div class='main-title'>📊 SPX &amp; NASDAQ</div>
@@ -577,68 +848,65 @@ if not data_etf:
 
 def fut_html(name, data):
     if not data: return ""
-    color = "#d62728" if data['percent'] >= 0 else "#2ca02c"
+    cls   = "pct-up" if data['percent'] >= 0 else "pct-down"
     pm    = "+" if data['percent'] >= 0 else ""
     return f"""
     <div class='fut-box'>
         <span class='fut-label'>{name}</span>
         <span class='fut-price'>{data['current']:.2f}</span>
-        <span class='fut-pct' style='color:{color}'>{pm}{data['percent']:.2f}%</span>
+        <span class='fut-pct {cls}'>{pm}{data['percent']:.2f}%</span>
     </div>"""
 
 def fx_html(data):
     if not data: return ""
-    color = "#d62728" if data['percent'] >= 0 else "#2ca02c"
+    cls   = "pct-up" if data['percent'] >= 0 else "pct-down"
     pm    = "+" if data['percent'] >= 0 else ""
     return f"""
     <div class='fx-box'>
         <span class='fx-label'>USD/CNH 离岸汇率</span>
         <span class='fx-price'>{data['current']:.4f}</span>
-        <span class='fut-pct' style='color:{color}'>{pm}{data['percent']:.2f}%</span>
+        <span class='fut-pct {cls}'>{pm}{data['percent']:.2f}%</span>
     </div>"""
 
 def drawdown_html(name, data, daily_pct=0.0):
     if not data: 
-        return f"<div style='font-size:11px; color:#888; margin-top:8px;'>⚠️ {name} 雷达数据拉取超时，请稍后刷新重试...</div>"
+        return f"<div style='font-size:11px; color:var(--text-secondary); margin-top:8px;'>⚠️ {name} 雷达数据拉取超时，请稍后刷新重试...</div>"
     
     dd = float(data['drawdown'])
     
     # 判定状态
     if dd <= -20:
         state = "🩸 熊市 (超跌)"
-        bg = "#7f1d1d"; tc = "#fecaca"; border = "#ef4444"; icon = "🚨 极度恐慌"
+        radar_cls = "radar-bear"
+        icon = "🚨 极度恐慌"
     elif dd <= -10:
         state = "🔥 修正 (大跌)"
-        bg = "#fff7ed"; tc = "#c2410c"; border = "#fdba74"; icon = "💡 南向通抄底窗口"
+        radar_cls = "radar-correction"
+        icon = "💡 南向通抄底窗口"
     elif dd <= -5:
         state = "⚠️ 回调 (Pullback)"
-        bg = "#fefce8"; tc = "#a16207"; border = "#fef08a"; icon = "👀 观察期"
+        radar_cls = "radar-pullback"
+        icon = "👀 观察期"
     else:
         state = "✅ 安全 (震荡/新高)"
-        bg = "#f0fdf4"; tc = "#15803d"; border = "#bbf7d0"; icon = "💎 定投场内"
+        radar_cls = "radar-safe"
+        icon = "💎 定投场内"
 
     alert_html = ""
     if daily_pct <= -1.5:
-        alert_html = f"<div style='margin-top:8px; padding:4px 6px; background:#fee2e2; border-left:3px solid #dc2626; border-radius:4px; animation: pulse 2s infinite;'><span style='font-size:11px; font-weight:700; color:#991b1b;'>⚡ 单日暴跌 {daily_pct:.2f}%：留意极高溢价套利！</span></div>"
+        alert_html = f"<div class='radar-alert'><span style='font-size:11px; font-weight:700;'>⚡ 单日暴跌 {daily_pct:.2f}%：留意极高溢价套利！</span></div>"
 
     return f"""
-    <style>
-    @keyframes pulse {{
-        0% {{ box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.4); }}
-        70% {{ box-shadow: 0 0 0 4px rgba(220, 38, 38, 0); }}
-        100% {{ box-shadow: 0 0 0 0 rgba(220, 38, 38, 0); }}
-    }}
-    </style>
-    <div style='background:{bg}; border:1px solid {border}; border-radius:8px; padding:8px 12px; margin-top:8px; display:flex; flex-direction:column; justify-content:center;'>
+    <div class='radar-box {radar_cls}'>
         <div style='display:flex; justify-content:space-between; align-items:center;'>
-            <span style='font-size:12px; font-weight:700; color:{tc};'>{name} 水位雷达</span>
-            <span style='font-size:11px; font-weight:600; color:{tc};'>{icon}</span>
+            <span class='radar-title'>{name} 水位雷达</span>
+            <span class='radar-icon'>{icon}</span>
         </div>
         <div style='margin-top:4px; display:flex; align-items:baseline;'>
-            <span style='font-size:18px; font-weight:bold; color:{tc};'>{dd:+.2f}%</span>
-            <span style='font-size:11px; color:{tc}; margin-left:6px; opacity:0.8;'>(距历史最高点)</span>
+            <span class='radar-num'>{dd:+.2f}%</span>
+            <span class='radar-sub'>(距历史最高点)</span>
         </div>
-        <div style='font-size:12px; font-weight:700; color:{tc}; margin-top:2px;'>状态：{state}</div>
+        <div class='radar-state'>状态：{state}</div>
         {alert_html}
     </div>
     """
@@ -719,11 +987,11 @@ def stat_card(label, code_short, pct):
 
 def avg_card(label, pct):
     arrow = "↑" if pct >= 0 else "↓"
-    color = "#d62728" if pct >= 0 else "#2ca02c"
+    cls   = "pct-up" if pct >= 0 else "pct-down"
     return f"""
     <div class='stat-card'>
         <div class='stat-label'>{label}</div>
-        <div style='font-size:15px;font-weight:700;color:{color};margin-top:4px;'>{arrow} {pct:+.2f}%</div>
+        <div class='{cls}' style='font-size:15px;font-weight:700;margin-top:4px;'>{arrow} {pct:+.2f}%</div>
     </div>"""
 
 # --- 标普 ---
@@ -781,31 +1049,28 @@ def render_mobile_cards_html(df_data):
 
         # 溢价高亮与标签
         if est_prem < 0:
-            prem_bg = "#fee2e2"
-            prem_tc = "#dc2626"
+            prem_cls = "m-prem-discount"
             prem_desc = "折价洼地"
         elif est_prem < 2.0:
-            prem_bg = "#fef3c7"
-            prem_tc = "#b45309"
+            prem_cls = "m-prem-low"
             prem_desc = "低溢价"
         else:
-            prem_bg = "#ecfdf5"
-            prem_tc = "#059669"
+            prem_cls = "m-prem-normal"
             prem_desc = "正常溢价"
 
-        # 涨跌幅颜色 (国内A股习惯：红涨绿跌)
-        pct_tc = "#dc2626" if pct > 0 else ("#16a34a" if pct < 0 else "#6b7280")
-        pct_sign = "+" if pct > 0 else ""
+        # 涨跌幅样式
+        if pct > 0:
+            pct_cls = "pct-up"
+            pct_sign = "+"
+        elif pct < 0:
+            pct_cls = "pct-down"
+            pct_sign = ""
+        else:
+            pct_cls = "pct-flat"
+            pct_sign = ""
 
         # 渠道建议徽章
-        if "场内" in advise:
-            advise_bg = "#e8f0fe"
-            advise_tc = "#1a56db"
-            advise_border = "#bfdbfe"
-        else:
-            advise_bg = "#ffeedd"
-            advise_tc = "#d97706"
-            advise_border = "#fed7aa"
+        advise_cls = "m-advise-market" if "场内" in advise else "m-advise-south"
 
         card_html = (
             f"<div class='m-etf-card'>"
@@ -814,18 +1079,18 @@ def render_mobile_cards_html(df_data):
             f"<div class='m-etf-name'>{name}</div>"
             f"<div class='m-code'>{code}</div>"
             f"</div>"
-            f"<div class='m-advise-badge' style='background:{advise_bg}; color:{advise_tc}; border:1px solid {advise_border};'>"
+            f"<div class='m-advise-badge {advise_cls}'>"
             f"{advise}"
             f"</div>"
             f"</div>"
             f"<div class='m-card-body'>"
-            f"<div class='m-prem-box' style='background:{prem_bg};'>"
-            f"<div class='m-prem-lbl' style='color:{prem_tc};'>实时溢价(EST) · {prem_desc}</div>"
-            f"<div class='m-prem-val' style='color:{prem_tc};'>{est_prem:+.2f}%</div>"
+            f"<div class='m-prem-box {prem_cls}'>"
+            f"<div class='m-prem-lbl'>实时溢价(EST) · {prem_desc}</div>"
+            f"<div class='m-prem-val'>{est_prem:+.2f}%</div>"
             f"</div>"
             f"<div class='m-price-box'>"
             f"<div class='m-price-val'>{curr_price:.3f}</div>"
-            f"<div class='m-price-pct' style='color:{pct_tc};'>{pct_sign}{pct:.2f}%</div>"
+            f"<div class='m-price-pct {pct_cls}'>{pct_sign}{pct:.2f}%</div>"
             f"</div>"
             f"</div>"
             f"<div class='m-card-footer'>"
@@ -852,23 +1117,23 @@ def render_mobile_cards_html(df_data):
 def color_premium(val):
     try:
         v = float(val)
-        if v < 0:   return "background-color:#ff4d4d;color:white;font-weight:bold"
-        elif v < 2: return "background-color:#ffcccc"
-        else:       return "background-color:#ccffcc"
+        if v < 0:   return "background-color:rgba(239,68,68,0.22);color:#ef4444;font-weight:bold"
+        elif v < 2: return "background-color:rgba(245,158,11,0.22);color:#f59e0b;font-weight:bold"
+        else:       return "background-color:rgba(16,185,129,0.22);color:#10b981;font-weight:bold"
     except: return ""
 
 def color_pct(val):
-    try: return "color:#d62728" if float(val) > 0 else "color:#2ca02c"
+    try: return "color:#ef4444;font-weight:bold" if float(val) > 0 else "color:#10b981;font-weight:bold"
     except: return ""
 
 def color_category(val):
-    if val == "标普":   return "color:#1a56db;font-weight:600"
-    elif val == "纳指": return "color:#b45309;font-weight:600"
+    if val == "标普":   return "color:#3b82f6;font-weight:600"
+    elif val == "纳指": return "color:#f59e0b;font-weight:600"
     return ""
 
 def color_advise(val):
-    if "场内" in val: return "background-color:#e8f0fe;color:#1a56db;font-weight:bold"
-    if "南向通" in val: return "background-color:#ffeedd;color:#d97706;font-weight:bold"
+    if "场内" in val: return "background-color:rgba(59,130,246,0.18);color:#3b82f6;font-weight:bold"
+    if "南向通" in val: return "background-color:rgba(249,115,22,0.18);color:#f97316;font-weight:bold"
     return ""
 
 display_cols = ["代码", "名称", "分类", "最新价", "估值(EST)", "涨跌幅(%)", "实时溢价(EST)", "最优渠道", "券商参考溢价", "资产净值"]
