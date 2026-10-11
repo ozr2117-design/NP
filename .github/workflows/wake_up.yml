@@ -53,7 +53,20 @@ jobs:
       - name: Ping Streamlit Apps to Prevent Sleep
         run: |
           echo "Pinging Streamlit Cloud apps to prevent sleep..."
-          for url in "https://rqehmildgsfhedt39krz7a.streamlit.app/" "https://qdii-quota-monitor.streamlit.app/"; do
-            STATUS=$(curl -sL -o /dev/null -w "%{http_code}" -H "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) KeepAlive/1.0" "$url" || true)
-            echo "Ping $url -> HTTP $STATUS"
-          done
+          python -c "
+          import requests
+          apps = [
+              'https://rqehmildgsfhedt39krz7a.streamlit.app/',
+              'https://qdii-quota-monitor.streamlit.app/'
+          ]
+          for app in apps:
+              s = requests.Session()
+              s.headers.update({
+                  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 KeepAlive/2.0'
+              })
+              try:
+                  r = s.get(app, timeout=20)
+                  print(f'✅ App {app} -> Status: {r.status_code}, History redirects: {len(r.history)}')
+              except Exception as e:
+                  print(f'⚠️ App {app} -> Error: {e}')
+          "
