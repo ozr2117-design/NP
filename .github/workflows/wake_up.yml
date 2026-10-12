@@ -24,9 +24,10 @@ jobs:
         with:
           python-version: '3.10'
 
-      - name: Install Dependencies
+      - name: Install Dependencies & Headless Browser
         run: |
-          pip install requests
+          pip install requests playwright
+          playwright install chromium --with-deps
 
       - name: Run Health Check & Data Fetch
         run: |
@@ -50,23 +51,7 @@ jobs:
           print('✅ 所有场内 ETF 与美股雷达数据源正常可用！')
           "
 
-      - name: Ping Streamlit Apps to Prevent Sleep
+      - name: Wake Up Streamlit Apps via Headless Browser
         run: |
-          echo "Pinging Streamlit Cloud apps to prevent sleep..."
-          python -c "
-          import requests
-          apps = [
-              'https://rqehmildgsfhedt39krz7a.streamlit.app/',
-              'https://qdii-quota-monitor.streamlit.app/'
-          ]
-          for app in apps:
-              s = requests.Session()
-              s.headers.update({
-                  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 KeepAlive/2.0'
-              })
-              try:
-                  r = s.get(app, timeout=20)
-                  print(f'✅ App {app} -> Status: {r.status_code}, History redirects: {len(r.history)}')
-              except Exception as e:
-                  print(f'⚠️ App {app} -> Error: {e}')
-          "
+          echo "=== 正在使用 Playwright 真实无头浏览器进行 Streamlit 唤醒与防休眠握手 ==="
+          python wake_streamlit.py "https://rqehmildgsfhedt39krz7a.streamlit.app/" "https://qdii-quota-monitor.streamlit.app/"
